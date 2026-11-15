@@ -28,6 +28,7 @@ import {
   VitalsData,
   MedicalAlert,
 } from '../types/astronaut.ts';
+import { OngoingHrpResearchWidget } from './OngoingHrpResearchWidget.tsx';
 
 interface DashboardOverviewPageProps {
   crew: CrewMemberSummary[];
@@ -680,6 +681,9 @@ export const DashboardOverviewPage: React.FC<DashboardOverviewPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Ongoing NASA HRP Research Widget */}
+      <OngoingHrpResearchWidget />
     </div>
   );
 };

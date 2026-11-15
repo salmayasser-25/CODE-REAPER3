@@ -675,8 +675,8 @@ export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavig
 
       {/* Modal: Log Daily Vitals Form */}
       {isLogModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-xl rounded-2xl bg-[#091128] border-2 border-[#00E5FF]/60 shadow-[0_0_50px_rgba(0,229,255,0.4)] p-6 sm:p-7 space-y-6 text-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-hidden">
+          <div className="relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-[#091128] border-2 border-[#00E5FF]/60 shadow-[0_0_50px_rgba(0,229,255,0.4)] p-6 sm:p-7 space-y-6 text-slate-100">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-3">

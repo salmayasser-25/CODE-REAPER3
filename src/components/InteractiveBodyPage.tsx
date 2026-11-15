@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, useMemo, useCallback } from 'react';
 import { Canvas, useThree, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -126,6 +126,7 @@ interface EcorcheSceneProps {
   hoveredMeshUuid: string | null;
   onSelectMesh: (mesh: THREE.Mesh, point: THREE.Vector3) => void;
   onHoverMesh: (mesh: THREE.Mesh | null) => void;
+  onReady?: () => void;
 }
 
 function EcorcheScene({
@@ -135,6 +136,7 @@ function EcorcheScene({
   hoveredMeshUuid,
   onSelectMesh,
   onHoverMesh,
+  onReady,
 }: EcorcheSceneProps) {
   const gltf = useLoader(
     GLTFLoader,
@@ -146,6 +148,12 @@ function EcorcheScene({
 
   // Clone scene so material changes don't mutate the cached GLTF resource
   const clonedScene = useMemo(() => gltf.scene.clone(true), [gltf.scene]);
+
+  useEffect(() => {
+    if (clonedScene && onReady) {
+      onReady();
+    }
+  }, [clonedScene, onReady]);
 
   // Update materials, layers, and highlights reactively
   useEffect(() => {
@@ -348,6 +356,7 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
   // Viewport Settings
   const [layerMode, setLayerMode] = useState<'all' | 'muscles' | 'skeleton'>('all');
   const [xrayOpacity, setXrayOpacity] = useState<number>(0.85);
+  const [isModelLoaded, setIsModelLoaded] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [focusTarget, setFocusTarget] = useState<THREE.Vector3 | null>(null);
   const [shouldResetCamera, setShouldResetCamera] = useState<boolean>(false);
@@ -617,6 +626,15 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
               />
             </div>
 
+            {!isModelLoaded && (
+              <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-black/85 border border-[#00E5FF]/40 text-[#00E5FF] font-mono text-xs font-bold shadow-[0_0_30px_rgba(0,229,255,0.3)]">
+                  <Sparkles className="w-5 h-5 text-[#00E5FF] animate-spin" />
+                  <span>INITIALIZING 634-STRUCTURE ÉCORCHÉ MODEL...</span>
+                </div>
+              </div>
+            )}
+
             {/* 3D Canvas */}
             <Canvas
               camera={{ position: [0, 0.05, 3.6], fov: 34, near: 0.01, far: 50 }}
@@ -630,16 +648,7 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
               <directionalLight position={[-3, 2, -3]} intensity={1.5} color="#00e5ff" />
               <pointLight position={[0, -2, 2]} intensity={1.2} color="#38bdf8" />
 
-              <Suspense
-                fallback={
-                  <Html center>
-                    <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-black/85 border border-[#00E5FF]/40 text-[#00E5FF] font-mono text-xs font-bold shadow-[0_0_30px_rgba(0,229,255,0.3)]">
-                      <Sparkles className="w-5 h-5 text-[#00E5FF] animate-spin" />
-                      <span>INITIALIZING 634-STRUCTURE ÉCORCHÉ MODEL...</span>
-                    </div>
-                  </Html>
-                }
-              >
+              <Suspense fallback={<AnatomicalProceduralFallback onSelect={handleProceduralSelect} />}>
                 <ModelErrorBoundary fallback={<AnatomicalProceduralFallback onSelect={handleProceduralSelect} />}>
                   <EcorcheScene
                     layerMode={layerMode}
@@ -648,6 +657,7 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
                     hoveredMeshUuid={hoveredMeshUuid}
                     onSelectMesh={handleSelectMesh}
                     onHoverMesh={handleHoverMesh}
+                    onReady={() => setIsModelLoaded(true)}
                   />
                 </ModelErrorBoundary>
               </Suspense>

@@ -3,6 +3,7 @@ import { Shield, Radio, CheckCircle, Send, Check, Stethoscope } from 'lucide-rea
 import { FlightSurgeon } from '../types/astronaut.js';
 
 interface SurgeonLinkCardProps {
+  astronautId?: string;
   surgeon: FlightSurgeon;
   isEditing?: boolean;
   onSurgeonChange?: (field: keyof FlightSurgeon, val: string) => void;
@@ -11,6 +12,7 @@ interface SurgeonLinkCardProps {
 }
 
 export const SurgeonLinkCard: React.FC<SurgeonLinkCardProps> = ({
+  astronautId = 'ASTRO-74-SJ',
   surgeon,
   isEditing = false,
   onSurgeonChange,
@@ -20,14 +22,32 @@ export const SurgeonLinkCard: React.FC<SurgeonLinkCardProps> = ({
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [lastPingTime, setLastPingTime] = useState<string | null>(null);
 
-  const handleSendPing = () => {
+  const handleSendPing = async () => {
     setIsTransmitting(true);
-    setTimeout(() => {
-      setIsTransmitting(false);
+    try {
+      const res = await fetch('/api/pings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          astronautId,
+          source: 'ping',
+          severity: 'warning',
+        }),
+      });
+      const timeStr = new Date().toLocaleTimeString();
+      setLastPingTime(timeStr);
+      if (res.ok) {
+        onSendPingToast?.('Encrypted Bio-metric Ping transmitted to Dr. Marcus Vance & logged in Flight Surgeon Alerts.');
+      } else {
+        onSendPingToast?.('Encrypted Bio-metric Ping queued (Relay retry pending).');
+      }
+    } catch {
       const timeStr = new Date().toLocaleTimeString();
       setLastPingTime(timeStr);
       onSendPingToast?.('Encrypted Bio-metric Ping sent to Dr. Marcus Vance. Awaiting response.');
-    }, 600);
+    } finally {
+      setIsTransmitting(false);
+    }
   };
 
   return (

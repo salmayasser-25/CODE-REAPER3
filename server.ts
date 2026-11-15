@@ -1,10 +1,25 @@
 import 'dotenv/config';
+import path from 'node:path';
 import express from 'express';
 import type { Request, Response } from 'express';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import Groq from 'groq-sdk';
-import { UpdateProfileSchema } from './src/types/astronaut.ts';
+import {
+  UpdateProfileSchema,
+  LogVitalsSchema,
+  UpdateVitalsSchema,
+  CreateCheckInSchema,
+  CreateSymptomSchema,
+  UpdateSymptomSchema,
+  CreateRestrictionSchema,
+  UpdateRestrictionSchema,
+  CreateDoctorNoteSchema,
+  SendMessageSchema,
+  CreatePingSchema,
+  CreateSurgeonOrderSchema,
+  SimulatorRunSchema,
+  LogWorkoutSessionSchema,
+} from './src/types/astronaut.ts';
 import type {
   ExerciseCategory,
   FitnessAIAnalysis,
@@ -19,6 +34,7 @@ import {
   logDailyVitals,
   getSymptoms,
   addSymptom,
+  updateSymptomStatus,
   deleteSymptom,
   getCheckIns,
   addCheckIn,
@@ -38,6 +54,7 @@ import {
   updateDoctorNote,
   getConversations,
   getMessages,
+  markConversationRead,
   sendMedicalMessage,
   getMedicalAlerts,
   acknowledgeAlert,
@@ -67,11 +84,33 @@ import {
   detectEmergencyAndConcerningVitals,
   escalateMedicalIssueToTeam,
   postAstronautDirectToSurgeon,
+  createBiometricPing,
+  getSurgeonOrders,
+  createSurgeonOrder,
+  updateSurgeonOrder,
+  getSurgeonCrewDossier,
 } from './src/server/mockDb.ts';
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-const isProd = process.env.NODE_ENV === 'production';
+const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
+function resolvePort(): number {
+  const portFlagIndex = process.argv.indexOf('--port');
+  if (portFlagIndex !== -1 && process.argv[portFlagIndex + 1]) {
+    const parsed = parseInt(process.argv[portFlagIndex + 1], 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  const eqFlag = process.argv.find((arg) => arg.startsWith('--port='));
+  if (eqFlag) {
+    const parsed = parseInt(eqFlag.slice('--port='.length), 10);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  const rawPort = process.env.PORT || process.env.DEFAULT_APP_PORT;
+  const envPort = rawPort ? parseInt(rawPort, 10) : NaN;
+  return !Number.isNaN(envPort) && envPort > 0 ? envPort : 3000;
+}
+
+const PORT = resolvePort();
 
 // Initialize Groq AI Client (Primary fast & generous chat provider)
 let cachedGroqModel: string | null = null;
@@ -172,10 +211,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 
 
-// GET /api/profile — Fetch astronaut profile
-app.get('/api/profile', (_req: Request, res: Response) => {
+// GET /api/profile — Fetch astronaut profile (supports ?astronautId=...)
+app.get('/api/profile', (req: Request, res: Response) => {
   try {
-    const profile = getProfile();
+    const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
+    const profile = getProfile(astronautId);
     res.json({ success: true, data: profile });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch astronaut profile' });
@@ -185,6 +225,7 @@ app.get('/api/profile', (_req: Request, res: Response) => {
 // PATCH /api/profile — Update astronaut profile with Zod validation
 app.patch('/api/profile', (req: Request, res: Response) => {
   try {
+    const astronautId = (req.query.astronautId as string) || (req.body?.id as string) || 'ASTRO-74-SJ';
     const parseResult = UpdateProfileSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({
@@ -194,7 +235,7 @@ app.patch('/api/profile', (req: Request, res: Response) => {
       });
     }
 
-    const updated = updateProfile(parseResult.data);
+    const updated = updateProfile(parseResult.data, astronautId);
     res.json({ success: true, data: updated, message: 'Astronaut dossier successfully updated' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to update astronaut profile' });
@@ -202,8 +243,9 @@ app.patch('/api/profile', (req: Request, res: Response) => {
 });
 
 // POST /api/profile/reset — Reset back to default Dr. Salma Johnson mock state
-app.post('/api/profile/reset', (_req: Request, res: Response) => {
+app.post('/api/profile/reset', (req: Request, res: Response) => {
   try {
+    const astronautId = (req.query.astronautId as string) || (req.body?.astronautId as string) || 'ASTRO-74-SJ';
     const resetProfile = updateProfile({
       name: 'Dr. Salma Johnson',
       callsign: 'Nova',
@@ -234,7 +276,7 @@ app.post('/api/profile/reset', (_req: Request, res: Response) => {
       spO2Baseline: 99,
       radiationDoseMsv: 14.8,
       missionElapsedDays: 84,
-    });
+    }, astronautId);
     res.json({ success: true, data: resetProfile, message: 'Profile reset to flight baseline' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to reset profile' });
@@ -242,42 +284,49 @@ app.post('/api/profile/reset', (_req: Request, res: Response) => {
 });
 
 // GET /api/vitals — Fetch real-time vitals and historical telemetry
-app.get('/api/vitals', (_req: Request, res: Response) => {
+app.get('/api/vitals', (req: Request, res: Response) => {
   try {
-    const vitals = getVitals();
+    const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
+    const vitals = getVitals(astronautId);
     res.json({ success: true, data: vitals });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch vitals' });
   }
 });
 
-// PATCH /api/vitals — Update vitals
+// PATCH /api/vitals — Update vitals with Zod validation
 app.patch('/api/vitals', (req: Request, res: Response) => {
   try {
-    const updated = updateVitals(req.body);
+    const parsed = UpdateVitalsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten(),
+      });
+    }
+    const astronautId = parsed.data.astronautId || (req.query.astronautId as string) || 'ASTRO-74-SJ';
+    const { astronautId: _omit, ...vitalUpdates } = parsed.data;
+    const updated = updateVitals(vitalUpdates, astronautId);
     res.json({ success: true, data: updated });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to update vitals' });
   }
 });
 
-// POST /api/vitals/log — Log daily vitals from modal form
+// POST /api/vitals/log — Log daily vitals from modal form with Zod validation
 app.post('/api/vitals/log', (req: Request, res: Response) => {
   try {
-    const { heartRate, bloodPressureSys, bloodPressureDia, spO2, temperature, sleepHours, weightKg } = req.body;
-    if (heartRate === undefined || bloodPressureSys === undefined || bloodPressureDia === undefined || spO2 === undefined || temperature === undefined || sleepHours === undefined) {
-      return res.status(400).json({ success: false, error: 'All core vital signs (HR, BP, SpO2, Temp, Sleep) are required.' });
+    const parsed = LogVitalsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: Core vital signs (HR, BP, SpO2, Temp, Sleep) must be valid numbers.',
+        details: parsed.error.flatten(),
+      });
     }
 
-    const updated = logDailyVitals({
-      heartRate: Number(heartRate),
-      bloodPressureSys: Number(bloodPressureSys),
-      bloodPressureDia: Number(bloodPressureDia),
-      spO2: Number(spO2),
-      temperature: Number(temperature),
-      sleepHours: Number(sleepHours),
-      weightKg: weightKg ? Number(weightKg) : undefined,
-    });
+    const updated = logDailyVitals(parsed.data);
 
     res.status(201).json({
       success: true,
@@ -354,14 +403,24 @@ app.get('/api/nasa/donki', async (_req: Request, res: Response) => {
 // POST /api/simulator/run — Digital Twin Biomechanical Risk Simulator
 app.post('/api/simulator/run', (req: Request, res: Response) => {
   try {
+    const parsed = SimulatorRunSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten(),
+      });
+    }
     const {
+      astronautId,
       actionId = 'ared-squat',
       weightKg = 120,
       pressurePsi = 4.3,
       treadmillSpeedKmh = 12,
       profile,
-    } = req.body;
-    const spineDelta = profile?.spineElongation || 4.2;
+    } = parsed.data;
+    const resolvedProfile = astronautId ? getProfile(astronautId) : null;
+    const spineDelta = profile?.spineElongation ?? resolvedProfile?.spineElongation ?? 4.2;
 
     let result = {
       actionId: 'ared-squat',
@@ -429,9 +488,10 @@ app.post('/api/simulator/run', (req: Request, res: Response) => {
 });
 
 // GET /api/checkins — Fetch daily health check-in entries
-app.get('/api/checkins', (_req: Request, res: Response) => {
+app.get('/api/checkins', (req: Request, res: Response) => {
   try {
-    const checkIns = getCheckIns();
+    const astronautId = req.query.astronautId as string | undefined;
+    const checkIns = getCheckIns(astronautId);
     res.json({ success: true, data: checkIns });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch check-ins' });
@@ -441,21 +501,26 @@ app.get('/api/checkins', (_req: Request, res: Response) => {
 // POST /api/checkin — Submit a daily health check-in
 app.post('/api/checkin', (req: Request, res: Response) => {
   try {
-    const { astronautId, missionDay, mood, energyLevel, sleepQuality, sleepHours, hydrationLiters, spaceAdaptationSymptoms, notes } = req.body;
-    if (!mood || energyLevel === undefined || !sleepQuality) {
-      return res.status(400).json({ success: false, error: 'Mood, Energy Level, and Sleep Quality are required.' });
+    const parsed = CreateCheckInSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: Mood, Energy Level (1-10), and Sleep Quality are required.',
+        details: parsed.error.flatten(),
+      });
     }
 
+    const d = parsed.data;
     const newCheckIn = addCheckIn({
-      astronautId: astronautId || 'ASTRO-74-SJ',
-      missionDay: Number(missionDay) || 84,
-      mood,
-      energyLevel: Number(energyLevel),
-      sleepQuality,
-      sleepHours: Number(sleepHours) || 6,
-      hydrationLiters: Number(hydrationLiters) || 2.0,
-      spaceAdaptationSymptoms: Array.isArray(spaceAdaptationSymptoms) ? spaceAdaptationSymptoms : [],
-      notes: notes || '',
+      astronautId: d.astronautId || 'ASTRO-74-SJ',
+      missionDay: d.missionDay || 84,
+      mood: d.mood,
+      energyLevel: d.energyLevel,
+      sleepQuality: d.sleepQuality,
+      sleepHours: d.sleepHours || 6,
+      hydrationLiters: d.hydrationLiters || 2.0,
+      spaceAdaptationSymptoms: Array.isArray(d.spaceAdaptationSymptoms) ? d.spaceAdaptationSymptoms : [],
+      notes: d.notes || '',
     });
 
     res.status(201).json({
@@ -469,9 +534,10 @@ app.post('/api/checkin', (req: Request, res: Response) => {
 });
 
 // GET /api/timeline — Fetch unified medical and telemetry timeline
-app.get('/api/timeline', (_req: Request, res: Response) => {
+app.get('/api/timeline', (req: Request, res: Response) => {
   try {
-    const events = getTimelineEvents();
+    const astronautId = req.query.astronautId as string | undefined;
+    const events = getTimelineEvents(astronautId);
     res.json({ success: true, data: events });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch timeline events' });
@@ -479,9 +545,10 @@ app.get('/api/timeline', (_req: Request, res: Response) => {
 });
 
 // GET /api/symptoms — Fetch logged symptoms
-app.get('/api/symptoms', (_req: Request, res: Response) => {
+app.get('/api/symptoms', (req: Request, res: Response) => {
   try {
-    const symptoms = getSymptoms();
+    const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
+    const symptoms = getSymptoms(astronautId);
     res.json({ success: true, data: symptoms });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch symptoms' });
@@ -491,10 +558,15 @@ app.get('/api/symptoms', (_req: Request, res: Response) => {
 // POST /api/symptoms — Log a new symptom report
 app.post('/api/symptoms', (req: Request, res: Response) => {
   try {
-    const { bodyPart, meshId, painType, intensity, notes, status } = req.body;
-    if (!bodyPart) {
-      return res.status(400).json({ success: false, error: 'bodyPart is required' });
+    const parsed = CreateSymptomSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: bodyPart is required',
+        details: parsed.error.flatten(),
+      });
     }
+    const { astronautId, bodyPart, meshId, painType, intensity, notes, status } = parsed.data;
     const created = addSymptom({
       bodyPart,
       meshId,
@@ -502,10 +574,32 @@ app.post('/api/symptoms', (req: Request, res: Response) => {
       intensity: typeof intensity === 'number' ? intensity : 5,
       notes: notes || '',
       status: status || 'active',
-    });
+    }, astronautId || 'ASTRO-74-SJ');
     res.status(201).json({ success: true, data: created, message: 'Symptom logged to clinical registry' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to log symptom' });
+  }
+});
+
+// PATCH /api/symptoms/:id — Update symptom status or clinical notes (Flight Surgeon triage)
+app.patch('/api/symptoms/:id', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsed = UpdateSymptomSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten(),
+      });
+    }
+    const updated = updateSymptomStatus(id, parsed.data.status, parsed.data.notes, parsed.data.astronautId);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Symptom report not found' });
+    }
+    res.json({ success: true, data: updated, message: 'Symptom status updated' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to update symptom' });
   }
 });
 
@@ -513,7 +607,8 @@ app.post('/api/symptoms', (req: Request, res: Response) => {
 app.delete('/api/symptoms/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = deleteSymptom(id);
+    const astronautId = req.query.astronautId as string | undefined;
+    const deleted = deleteSymptom(id, astronautId);
     if (!deleted) {
       return res.status(404).json({ success: false, error: 'Symptom report not found' });
     }
@@ -534,10 +629,12 @@ app.get('/api/crew', (_req: Request, res: Response) => {
 });
 
 // GET /api/alerts — Medical Alerts Registry
-app.get('/api/alerts', (_req: Request, res: Response) => {
+app.get('/api/alerts', (req: Request, res: Response) => {
   try {
+    const astronautId = req.query.astronautId as string | undefined;
     const alerts = getMedicalAlerts();
-    res.json({ success: true, data: alerts });
+    const filtered = astronautId ? alerts.filter((a) => a.astronautId === astronautId) : alerts;
+    res.json({ success: true, data: filtered });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch medical alerts' });
   }
@@ -586,13 +683,19 @@ app.get('/api/restrictions', (req: Request, res: Response) => {
 // POST /api/restrictions — Prescribe new Medical Restriction
 app.post('/api/restrictions', (req: Request, res: Response) => {
   try {
-    const { astronautId, astronautName, name, description, affectedRegion, restrictedExercises, severity, effectiveDate, status, prescribedBy, clinicalRationale } = req.body;
-    if (!name || !description || !affectedRegion) {
-      return res.status(400).json({ success: false, error: 'Name, description, and affectedRegion are required' });
+    const parsed = CreateRestrictionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: name, description, and affectedRegion are required',
+        details: parsed.error.flatten(),
+      });
     }
+    const { astronautId, astronautName, name, description, affectedRegion, restrictedExercises, severity, effectiveDate, status, prescribedBy, clinicalRationale } = parsed.data;
+    const targetId = astronautId || 'ASTRO-74-SJ';
     const created = addRestriction({
-      astronautId: astronautId || 'ASTRO-74-SJ',
-      astronautName: astronautName || 'Dr. Salma Johnson',
+      astronautId: targetId,
+      astronautName: astronautName || getProfile(targetId).name,
       name,
       description,
       affectedRegion,
@@ -613,7 +716,15 @@ app.post('/api/restrictions', (req: Request, res: Response) => {
 app.patch('/api/restrictions/:id', (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updated = updateRestriction(id, req.body);
+    const parsed = UpdateRestrictionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten(),
+      });
+    }
+    const updated = updateRestriction(id, parsed.data);
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Medical restriction not found' });
     }
@@ -651,13 +762,19 @@ app.get('/api/doctor-notes', (req: Request, res: Response) => {
 // POST /api/doctor-notes — Add new Clinical Note
 app.post('/api/doctor-notes', (req: Request, res: Response) => {
   try {
-    const { astronautId, astronautName, category, title, content, relatedSymptoms, vitalsSnapshot, status, author } = req.body;
-    if (!title || !content) {
-      return res.status(400).json({ success: false, error: 'Title and content are required' });
+    const parsed = CreateDoctorNoteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: title and content are required',
+        details: parsed.error.flatten(),
+      });
     }
+    const { astronautId, astronautName, category, title, content, relatedSymptoms, vitalsSnapshot, status, author } = parsed.data;
+    const targetId = astronautId || 'ASTRO-74-SJ';
     const created = addDoctorNote({
-      astronautId: astronautId || 'ASTRO-74-SJ',
-      astronautName: astronautName || 'Dr. Salma Johnson',
+      astronautId: targetId,
+      astronautName: astronautName || getProfile(targetId).name,
       author: author || 'Dr. Marcus Vance, M.D., FACEP (Lead Flight Surgeon)',
       category: category || 'Routine Assessment',
       title,
@@ -700,6 +817,9 @@ app.get('/api/communications/conversations', (_req: Request, res: Response) => {
 app.get('/api/communications/messages/:conversationId', (req: Request, res: Response) => {
   try {
     const { conversationId } = req.params;
+    if (req.query.markRead === 'true') {
+      markConversationRead(conversationId);
+    }
     const messages = getMessages(conversationId);
     res.json({ success: true, data: messages });
   } catch (error: any) {
@@ -707,20 +827,194 @@ app.get('/api/communications/messages/:conversationId', (req: Request, res: Resp
   }
 });
 
-// POST /api/communications/messages — Send Message in Telemedicine Network
+// POST /api/communications/messages — Send Message in Shared Telemedicine Network
 app.post('/api/communications/messages', (req: Request, res: Response) => {
   try {
-    const { conversationId, content, messageType, priority } = req.body;
-    if (!conversationId || !content || !content.trim()) {
-      return res.status(400).json({ success: false, error: 'conversationId and content are required' });
+    const parsed = SendMessageSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: conversationId and non-empty content are required',
+        details: parsed.error.flatten(),
+      });
     }
-    const message = sendMedicalMessage(conversationId, content, messageType, priority);
-    if (conversationId === 'conv-astro-salma') {
-      clearServerTimeoutHandle('ASTRO-74-SJ');
+    const data = parsed.data;
+    const message = sendMedicalMessage(data);
+
+    // Only clear SLA response timeout timer when the Flight Surgeon actually replies
+    if (data.conversationId === 'conv-astro-salma' && message.isSurgeon) {
+      clearServerTimeoutHandle(data.astronautId || 'ASTRO-74-SJ');
     }
+
     res.status(201).json({ success: true, data: message, message: 'Message transmitted via Ground Control Relay' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to send message' });
+  }
+});
+
+// ─── Bio-Metric Ping & Flight Surgeon Restoration Endpoints ─────────────────
+
+// POST /api/pings & /api/surgeon/pings — Astronaut transmits Bio-Metric Ping to Flight Surgeon
+const handleCreatePing = (req: Request, res: Response) => {
+  try {
+    const parsed = CreatePingSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten(),
+      });
+    }
+    const result = createBiometricPing(parsed.data);
+    res.status(201).json({
+      success: true,
+      data: result,
+      message: 'Encrypted bio-metric ping dispatched to Flight Surgeon console',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to transmit bio-metric ping' });
+  }
+};
+app.post('/api/pings', handleCreatePing);
+app.post('/api/surgeon/pings', handleCreatePing);
+
+// GET /api/surgeon/crew — Crew Matrix Overview
+app.get('/api/surgeon/crew', (_req: Request, res: Response) => {
+  try {
+    res.json({ success: true, data: getCrewMembers() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to fetch surgeon crew overview' });
+  }
+});
+
+// GET /api/surgeon/crew/:astronautId — Complete Single-Astronaut Clinical Dossier
+app.get('/api/surgeon/crew/:astronautId', (req: Request, res: Response) => {
+  try {
+    const dossier = getSurgeonCrewDossier(req.params.astronautId);
+    res.json({ success: true, data: dossier });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to fetch crew dossier' });
+  }
+});
+
+// GET /api/surgeon/alerts — Incoming Bio-Pings & Medical Alerts
+app.get('/api/surgeon/alerts', (req: Request, res: Response) => {
+  try {
+    const astronautId = req.query.astronautId as string | undefined;
+    const alerts = getMedicalAlerts();
+    const filtered = astronautId ? alerts.filter((a) => a.astronautId === astronautId) : alerts;
+    res.json({ success: true, data: filtered });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to fetch surgeon alerts' });
+  }
+});
+
+// GET /api/surgeon/messages — Shared Communications View for Flight Surgeon
+app.get('/api/surgeon/messages', (req: Request, res: Response) => {
+  try {
+    const conversationId = req.query.conversationId as string | undefined;
+    const markRead = req.query.markRead === 'true';
+    const conversations = getConversations();
+
+    if (conversationId) {
+      if (markRead) markConversationRead(conversationId);
+      const messages = getMessages(conversationId);
+      return res.json({
+        success: true,
+        data: { conversationId, messages, conversations: getConversations() },
+      });
+    }
+
+    const messagesByConversation: Record<string, ReturnType<typeof getMessages>> = {};
+    for (const conv of conversations) {
+      messagesByConversation[conv.id] = getMessages(conv.id);
+    }
+
+    res.json({
+      success: true,
+      data: { conversations, messagesByConversation },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to fetch surgeon messages' });
+  }
+});
+
+// POST /api/surgeon/messages — Send reply directly from Flight Surgeon Console
+app.post('/api/surgeon/messages', (req: Request, res: Response) => {
+  try {
+    const parsed = SendMessageSchema.safeParse({
+      ...req.body,
+      sender: 'surgeon',
+      isSurgeon: true,
+      senderId: req.body?.senderId || 'user-fs-vance',
+      senderName: req.body?.senderName || 'Dr. Marcus Vance, M.D.',
+      senderRole: req.body?.senderRole || 'Lead Flight Surgeon',
+    });
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: conversationId and content are required',
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const message = sendMedicalMessage(parsed.data);
+    if (parsed.data.conversationId === 'conv-astro-salma') {
+      clearServerTimeoutHandle(parsed.data.astronautId || 'ASTRO-74-SJ');
+    }
+
+    res.status(201).json({
+      success: true,
+      data: message,
+      message: 'Flight Surgeon transmission relayed to astronaut comms hub',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to send surgeon message' });
+  }
+});
+
+// GET /api/surgeon/orders — Medical Orders & Exercise Clearances
+app.get('/api/surgeon/orders', (req: Request, res: Response) => {
+  try {
+    const astronautId = req.query.astronautId as string | undefined;
+    res.json({ success: true, data: getSurgeonOrders(astronautId) });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to fetch surgeon orders' });
+  }
+});
+
+// POST /api/surgeon/orders — Issue Medical Order / Approve Restricted Exercise
+app.post('/api/surgeon/orders', (req: Request, res: Response) => {
+  try {
+    const parsed = CreateSurgeonOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: parsed.error.flatten(),
+      });
+    }
+    const result = createSurgeonOrder(parsed.data);
+    res.status(201).json({
+      success: true,
+      data: result,
+      message: `Surgeon order "${result.order.title}" recorded and synchronized`,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to create surgeon order' });
+  }
+});
+
+// PATCH /api/surgeon/orders/:id — Update or Revoke Medical Order
+app.patch('/api/surgeon/orders/:id', (req: Request, res: Response) => {
+  try {
+    const updated = updateSurgeonOrder(req.params.id, req.body || {});
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Surgeon order not found' });
+    }
+    res.json({ success: true, data: updated, message: 'Surgeon order updated' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Failed to update surgeon order' });
   }
 });
 
@@ -1869,14 +2163,16 @@ app.delete('/api/medical-assistant/history/:astronautId', (req: Request, res: Re
 // POST /api/ai/insight — Gemini AI Clinical Insight for Vitals
 app.post('/api/ai/insight', async (req: Request, res: Response) => {
   try {
-    const { vitals, profile } = req.body;
-    const hr = vitals?.heartRate ?? 72;
-    const bpSys = vitals?.bloodPressureSys ?? 118;
-    const bpDia = vitals?.bloodPressureDia ?? 76;
-    const spo2 = vitals?.spO2 ?? 99;
-    const sleep = vitals?.sleepHours ?? 5.9;
-    const baselineHr = profile?.restingHeartRate ?? 58;
-    const spineDelta = profile?.spineElongation ?? 4.2;
+    const { vitals, profile, astronautId = 'ASTRO-74-SJ' } = req.body || {};
+    const resolvedVitals = vitals || getVitals(astronautId);
+    const resolvedProfile = profile || getProfile(astronautId);
+    const hr = resolvedVitals?.heartRate ?? 72;
+    const bpSys = resolvedVitals?.bloodPressureSys ?? 118;
+    const bpDia = resolvedVitals?.bloodPressureDia ?? 76;
+    const spo2 = resolvedVitals?.spO2 ?? 99;
+    const sleep = resolvedVitals?.sleepHours ?? 5.9;
+    const baselineHr = resolvedProfile?.restingHeartRate ?? 58;
+    const spineDelta = resolvedProfile?.spineElongation ?? 4.2;
 
     const ai = getGeminiClient();
     if (ai) {
@@ -2124,11 +2420,12 @@ app.post('/api/ai/chat', handleAstroChat);
 
 // ─── Fitness / Exercise Endpoints ───────────────────────────────────────────
 
-// GET /api/fitness/exercises — All exercises evaluated against current astronaut profile
-app.get('/api/fitness/exercises', (_req: Request, res: Response) => {
+// GET /api/fitness/exercises — All exercises evaluated against astronaut profile & surgeon clearances
+app.get('/api/fitness/exercises', (req: Request, res: Response) => {
   try {
-    const { exercises, restricted } = evaluateExercisesForAstronaut();
-    res.json({ success: true, data: exercises, restricted });
+    const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
+    const { exercises, restricted, approvedExerciseIds } = evaluateExercisesForAstronaut(astronautId);
+    res.json({ success: true, data: exercises, restricted, approvedExerciseIds });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch exercises' });
   }
@@ -2138,8 +2435,8 @@ app.get('/api/fitness/exercises', (_req: Request, res: Response) => {
 app.get('/api/fitness/exercises/:category', (req: Request, res: Response) => {
   try {
     const rawCategory = req.params.category;
+    const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
     const validCategories: ExerciseCategory[] = ['Upper Body', 'Lower Body', 'Core', 'Full Body'];
-    // Accept URL-friendly formats: "Upper%20Body", "upper-body", "Upper Body"
     const normalized = decodeURIComponent(rawCategory).replace(/-/g, ' ');
     const matched = validCategories.find(
       (c) => c.toLowerCase() === normalized.toLowerCase()
@@ -2152,23 +2449,23 @@ app.get('/api/fitness/exercises/:category', (req: Request, res: Response) => {
       });
     }
 
-    // Evaluate against astronaut profile then filter by category
-    const { exercises, restricted } = evaluateExercisesForAstronaut();
+    const { exercises, restricted, approvedExerciseIds } = evaluateExercisesForAstronaut(astronautId);
     const filtered = exercises.filter((e) => e.category === matched);
     const filteredRestricted = restricted.filter((r) =>
       filtered.some((e) => e.id === r.exerciseId)
     );
 
-    res.json({ success: true, data: filtered, restricted: filteredRestricted });
+    res.json({ success: true, data: filtered, restricted: filteredRestricted, approvedExerciseIds });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch exercises by category' });
   }
 });
 
 // GET /api/fitness/sessions — Fetch completed workout sessions
-app.get('/api/fitness/sessions', (_req: Request, res: Response) => {
+app.get('/api/fitness/sessions', (req: Request, res: Response) => {
   try {
-    const sessions = getWorkoutSessions();
+    const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
+    const sessions = getWorkoutSessions(astronautId);
     res.json({ success: true, data: sessions });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch workout sessions' });
@@ -2178,7 +2475,16 @@ app.get('/api/fitness/sessions', (_req: Request, res: Response) => {
 // POST /api/fitness/sessions — Complete & log an interactive workout session
 app.post('/api/fitness/sessions', (req: Request, res: Response) => {
   try {
+    const parsed = LogWorkoutSessionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed: exerciseId and exerciseName are required',
+        details: parsed.error.flatten(),
+      });
+    }
     const {
+      astronautId,
       exerciseId,
       exerciseName,
       category,
@@ -2189,11 +2495,7 @@ app.post('/api/fitness/sessions', (req: Request, res: Response) => {
       avgHeartRate,
       peakHeartRate,
       notes,
-    } = req.body;
-
-    if (!exerciseId || !exerciseName) {
-      return res.status(400).json({ success: false, error: 'exerciseId and exerciseName are required' });
-    }
+    } = parsed.data;
 
     const created = logWorkoutSession({
       exerciseId,
@@ -2206,7 +2508,7 @@ app.post('/api/fitness/sessions', (req: Request, res: Response) => {
       avgHeartRate: Number(avgHeartRate) || 118,
       peakHeartRate: Number(peakHeartRate) || 134,
       notes: notes || '',
-    });
+    }, astronautId || 'ASTRO-74-SJ');
 
     res.status(201).json({
       success: true,
@@ -2221,10 +2523,11 @@ app.post('/api/fitness/sessions', (req: Request, res: Response) => {
 // POST /api/fitness/ai-analysis — Gemini AI fitness analysis for current astronaut
 app.post('/api/fitness/ai-analysis', async (req: Request, res: Response) => {
   try {
-    const profile = getProfile();
-    const vitals = getVitals();
-    const symptoms = getSymptoms();
-    const { exercises, restricted } = evaluateExercisesForAstronaut();
+    const astronautId = (req.query.astronautId as string) || (req.body?.astronautId as string) || 'ASTRO-74-SJ';
+    const profile = getProfile(astronautId);
+    const vitals = getVitals(astronautId);
+    const symptoms = getSymptoms(astronautId);
+    const { exercises, restricted } = evaluateExercisesForAstronaut(astronautId);
 
     const ai = getGeminiClient();
     if (ai) {
@@ -2367,15 +2670,15 @@ Based on the astronaut's complete profile, vitals, symptoms, and conditions, gen
 // POST /api/fitness/chat — Interactive chat with NASA Exercise Physiologist Agent
 app.post('/api/fitness/chat', async (req: Request, res: Response) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, astronautId = 'ASTRO-74-SJ' } = req.body;
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ success: false, error: 'Message is required' });
     }
 
-    const profile = getProfile();
-    const vitals = getVitals();
-    const symptoms = getSymptoms();
-    const { exercises, restricted } = evaluateExercisesForAstronaut();
+    const profile = getProfile(astronautId);
+    const vitals = getVitals(astronautId);
+    const symptoms = getSymptoms(astronautId);
+    const { exercises, restricted } = evaluateExercisesForAstronaut(astronautId);
 
     const systemPrompt = `You are Commander Vance, the NASA Lead Exercise Physiologist and Countermeasures Specialist for ISS Expedition 74.
 You are directly speaking with Astronaut ${profile.name} (Callsign: ${profile.callsign}).
@@ -2467,22 +2770,41 @@ Instructions:
 });
 
 
+// Ensure unmatched /api/* endpoints return JSON 404 rather than HTML SPA fallback
+app.all('/api/*', (req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: `API endpoint not found: ${req.method} ${req.originalUrl}`,
+  });
+});
+
 // Mount Vite or static server
 async function startServer() {
   if (!isProd) {
-    const vite = await createViteServer({
+    const { createServer: createViteServer } = await import('vite');
+    const vitePromise = createViteServer({
       server: {
         middlewareMode: true,
         hmr: false,
+        ws: false,
         watch: null,
       },
       appType: 'spa',
     });
-    app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      try {
+        const vite = await vitePromise;
+        vite.middlewares(req, res, next);
+      } catch (err) {
+        next(err);
+      }
+    });
   } else {
-    app.use(express.static('dist'));
+    const distDir = path.resolve(process.cwd(), 'dist');
+    app.use(express.static(distDir));
     app.get('*', (_req: Request, res: Response) => {
-      res.sendFile('dist/index.html', { root: '.' });
+      res.sendFile(path.join(distDir, 'index.html'));
     });
   }
 

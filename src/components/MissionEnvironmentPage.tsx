@@ -17,7 +17,8 @@ import {
   Zap,
   Globe2,
   Orbit,
-  Cpu
+  Cpu,
+  Info
 } from 'lucide-react';
 import { AstronautProfile } from '../types/astronaut.js';
 
@@ -368,6 +369,60 @@ export const MissionEnvironmentPage: React.FC<MissionEnvironmentPageProps> = ({ 
           <div className="mt-2 text-[11px] font-mono text-slate-400">
             Urine & Condensate Bus: <strong className="text-emerald-400">Pure 100%</strong>
           </div>
+        </div>
+      </div>
+
+      {/* OFFICIAL CSA RADIATION MONITORING (CANS INSTRUMENT) */}
+      <div className="glass-panel glass-panel-glow p-6 rounded-2xl border border-cyan-500/35 bg-[#070d20]/90 shadow-[0_0_28px_rgba(0,229,255,0.14)] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-400/40 text-cyan-300">
+              <ShieldAlert className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg sm:text-xl font-bold text-white font-['Chakra_Petch',sans-serif] tracking-wide">
+                  Official CSA Radiation Monitoring
+                </h2>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/40">
+                  CSA // CANS INSTRUMENT
+                </span>
+              </div>
+              <p className="text-xs font-mono text-slate-400 mt-0.5">
+                Compact and Autonomous Neutron Spectrometer · International Space Station Dosimetry
+              </p>
+            </div>
+          </div>
+
+          <span className="self-start sm:self-center px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-mono text-cyan-300 font-bold">
+            ~30% NEUTRON DOSE SHARE
+          </span>
+        </div>
+
+        <p className="text-xs sm:text-sm text-slate-200 font-sans leading-relaxed">
+          Inside the International Space Station, secondary neutrons produced when cosmic rays strike spacecraft shielding account for roughly <strong className="text-cyan-300">30% of the total radiation</strong> astronauts absorb. The Canadian Space Agency&apos;s <strong className="text-white">CANS (Compact and Autonomous Neutron Spectrometer)</strong> continuously measures neutron energy spectra inside crew modules to improve radiation risk assessments and shielding strategies for LEO and deep-space missions.
+        </p>
+
+        <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <a
+            href="https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 hover:underline font-bold"
+          >
+            <Info className="w-3.5 h-3.5 shrink-0" />
+            <span>Source: Canadian Space Agency (CSA) - Monitoring Radiation for Astronaut Health</span>
+            <ExternalLink className="w-3 h-3 shrink-0" />
+          </a>
+          <a
+            href="https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-slate-300 hover:text-white px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-500/50 transition-colors inline-flex items-center gap-1"
+          >
+            <span>Learn More</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       </div>
 

@@ -86,10 +86,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-[#080e22] border border-[#00E5FF]/45 shadow-[0_0_50px_rgba(0,229,255,0.25)] p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-hidden">
+      <div className="relative w-full max-w-3xl rounded-2xl bg-[#080e22] border border-[#00E5FF]/45 shadow-[0_0_50px_rgba(0,229,255,0.25)] max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div className="flex items-center justify-between p-6 sm:px-8 sm:pt-7 pb-4 border-b border-slate-800 shrink-0">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-white font-['Chakra_Petch',sans-serif] tracking-wide flex items-center gap-2.5">
               <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_10px_#00E5FF]" />
@@ -100,22 +100,23 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        {errorMessage && (
-          <div className="mt-4 p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-mono flex items-center gap-2.5">
-            <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
-
         {/* Form */}
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 sm:px-8 space-y-6">
+            {errorMessage && (
+              <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs sm:text-sm font-mono flex items-center gap-2.5">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
           {/* 1. Crew Dossier Fields */}
           <div className="p-5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-4">
             <h3 className="text-sm font-mono font-bold tracking-wider text-[#00E5FF] uppercase">
@@ -394,19 +395,21 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
             </div>
           </div>
 
+          </div>
+
           {/* Action Buttons */}
-          <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+          <div className="px-6 sm:px-8 py-4 border-t border-slate-800 flex justify-end gap-3 shrink-0 bg-[#080e22]">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-mono"
+              className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-mono cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2.5 rounded-xl bg-[#00E5FF] hover:bg-[#00E5FF]/90 text-black font-extrabold text-sm font-mono tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.45)]"
+              className="px-6 py-2.5 rounded-xl bg-[#00E5FF] hover:bg-[#00E5FF]/90 text-black font-extrabold text-sm font-mono tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(0,229,255,0.45)] cursor-pointer"
             >
               {isSubmitting ? (
                 <>

@@ -88,6 +88,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
   // Enhancement 1: Flight Surgeon Override & Crew Biometrics Simulator State
   const [globalSurgeonOverride, setGlobalSurgeonOverride] = useState<boolean>(false);
   const [overriddenExerciseIds, setOverriddenExerciseIds] = useState<string[]>([]);
+  const [serverApprovedIds, setServerApprovedIds] = useState<string[]>([]);
   const [showSimulator, setShowSimulator] = useState<boolean>(false);
   const [simSpineElongation, setSimSpineElongation] = useState<number>(profile.spineElongation || 4.2);
   const [simHeartRate, setSimHeartRate] = useState<number>(72);
@@ -102,7 +103,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
   // ── Fetch completed workout sessions ─────────────────────────────────────
   const fetchWorkoutSessions = async () => {
     try {
-      const res = await fetch('/api/fitness/sessions');
+      const res = await fetch(`/api/fitness/sessions?astronautId=${encodeURIComponent(profile.id)}`);
       if (res.ok) {
         const json = await res.json();
         setCompletedSessions(json.data ?? []);
@@ -113,22 +114,32 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
   };
 
   // ── Fetch exercises ──────────────────────────────────────────────────────
-  const fetchExercises = async (category?: ExerciseCategory | 'all') => {
-    setIsLoadingExercises(true);
-    setExercisesError(null);
+  const fetchExercises = async (category?: ExerciseCategory | 'all', silent = false) => {
+    if (!silent) {
+      setIsLoadingExercises(true);
+      setExercisesError(null);
+    }
     try {
-      const url =
+      const base =
         category && category !== 'all'
           ? `/api/fitness/exercises/${encodeURIComponent(category)}`
           : '/api/fitness/exercises';
+      const url = `${base}?astronautId=${encodeURIComponent(profile.id)}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to load exercises');
       const json = await res.json();
       setExercises(json.data ?? json.exercises ?? json ?? []);
+      if (Array.isArray(json.approvedExerciseIds)) {
+        setServerApprovedIds(json.approvedExerciseIds);
+      }
     } catch (err: any) {
-      setExercisesError(err.message || 'Unable to load exercises');
+      if (!silent) {
+        setExercisesError(err.message || 'Unable to load exercises');
+      }
     } finally {
-      setIsLoadingExercises(false);
+      if (!silent) {
+        setIsLoadingExercises(false);
+      }
     }
   };
 
@@ -140,6 +151,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
       const res = await fetch('/api/fitness/ai-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ astronautId: profile.id }),
       });
       if (!res.ok) throw new Error('AI analysis unavailable');
       const json = await res.json();
@@ -165,7 +177,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
       const res = await fetch('/api/fitness/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q }),
+        body: JSON.stringify({ message: q, astronautId: profile.id }),
       });
       if (!res.ok) throw new Error('Chat service unavailable');
       const json = await res.json();
@@ -184,17 +196,27 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
     fetchExercises();
     fetchAIAnalysis();
     fetchWorkoutSessions();
-  }, []);
+  }, [profile.id]);
 
-  // ── Re-fetch exercises when category changes ─────────────────────────────
+  // ── Re-fetch exercises when category changes + poll for Surgeon clearances ─
   useEffect(() => {
     fetchExercises(selectedCategory);
-  }, [selectedCategory]);
+    const interval = setInterval(() => {
+      fetchExercises(selectedCategory, true);
+    }, 4000);
+    const handleFocus = () => fetchExercises(selectedCategory, true);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [selectedCategory, profile.id]);
 
   // ── Compute effective exercise status factoring Biometrics Simulator & Surgeon Override ──
   const evaluatedExercises = exercises.map((ex) => {
+    const isServerCleared = Boolean(ex.surgeonApproved) || serverApprovedIds.includes(ex.id);
     const isCardOverridden =
-      globalSurgeonOverride || overriddenExerciseIds.includes(ex.id);
+      globalSurgeonOverride || overriddenExerciseIds.includes(ex.id) || isServerCleared;
 
     // Dynamic Biometrics Simulation Evaluation
     const hasSpinalRisk = simSpineElongation > 3.0;
@@ -203,7 +225,9 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
     let simRestricted = false;
     let simReason = ex.warningMessage || ex.restrictionReason || '';
 
-    if (simLumbarResolved && !hasSpinalRisk && !hasElevatedHrRisk) {
+    if (isServerCleared) {
+      simRestricted = false;
+    } else if (simLumbarResolved && !hasSpinalRisk && !hasElevatedHrRisk) {
       simRestricted = false;
     } else {
       const ruleText = ex.contraindications.join(' ').toLowerCase();
@@ -228,7 +252,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
     return {
       ...ex,
       effectiveRestricted,
-      isCardOverridden: simRestricted && isCardOverridden,
+      isCardOverridden: isCardOverridden && (simRestricted || isServerCleared),
       effectiveStatus,
       effectiveReason: simReason,
     };

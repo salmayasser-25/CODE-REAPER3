@@ -11,6 +11,9 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
   },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@react-three/drei": "^10.7.9",
@@ -20,6 +23,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "firebase": "^13.3.0",
     "groq-sdk": "^1.6.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",

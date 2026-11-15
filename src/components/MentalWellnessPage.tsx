@@ -16,7 +16,10 @@ import {
   Headphones, 
   ShieldCheck,
   RefreshCw,
-  Compass
+  Compass,
+  Info,
+  BookOpen,
+  ExternalLink
 } from 'lucide-react';
 import { ChatMessage, AstronautProfile } from '../types/astronaut.ts';
 
@@ -417,8 +420,8 @@ export const MentalWellnessPage: React.FC<MentalWellnessPageProps> = ({ profile 
 
   // Auto-scroll chat on new messages or thinking state
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isSending]);
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [messages.length, isSending]);
 
   // Voice speech synthesis (Text-to-Speech)
   const speakMessage = (text: string) => {
@@ -638,6 +641,45 @@ export const MentalWellnessPage: React.FC<MentalWellnessPageProps> = ({ profile 
 
           {/* Breathing Exercise Widget */}
           <BreathingExerciseWidget />
+
+          {/* Clinical Context Card: Isolation & Behavioral Health */}
+          <div className="glass-panel p-5 rounded-2xl border border-purple-500/35 bg-[#110a26]/85 space-y-3">
+            <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-purple-900/50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white font-['Chakra_Petch',sans-serif] uppercase tracking-wider">
+                    Clinical Context
+                  </h3>
+                  <div className="text-[11px] font-mono text-purple-300">
+                    Risk of Behavioral Changes and Psychiatric Disorders
+                  </div>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-500/20 text-purple-200 border border-purple-500/40">
+                ISOLATION &amp; CONFINEMENT
+              </span>
+            </div>
+
+            <p className="text-xs text-purple-100/90 font-sans leading-relaxed">
+              Extended orbital missions expose astronauts to prolonged isolation, spatial confinement, disrupted sleep-wake cycles, and communication delays with Earth. NASA&apos;s Human Research Program studies behavioral responses and cognitive adaptation in isolated, confined, and extreme (ICE) analog habitats—such as HERA and Antarctic stations—to validate early screening tools, mindfulness countermeasures, and crew support protocols.
+            </p>
+
+            <div className="pt-2.5 border-t border-purple-900/50 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+              <a
+                href="https://www.nasa.gov/hrp/risks/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-purple-300 hover:text-white hover:underline font-bold"
+              >
+                <Info className="w-3.5 h-3.5 text-[#00E5FF] shrink-0" />
+                <span>Source: NASA Human Research Program - Risks of Human Spaceflight</span>
+                <ExternalLink className="w-3 h-3 shrink-0" />
+              </a>
+            </div>
+          </div>
         </div>
 
         {/* Right Column (7 Cols): AI Chat Interface (Gemini Live / Speech) */}
@@ -705,7 +747,7 @@ export const MentalWellnessPage: React.FC<MentalWellnessPageProps> = ({ profile 
           </div>
 
           {/* Messages Stream - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 space-y-4">
             {messages.map((msg) => {
               const isUser = msg.role === 'user';
               return (
@@ -780,8 +822,8 @@ export const MentalWellnessPage: React.FC<MentalWellnessPageProps> = ({ profile 
             </div>
           )}
 
-          {/* Chat Input Bar - Fixed at Bottom */}
-          <div className="p-4 border-t border-purple-900/60 bg-[#130b2c]/90 shrink-0">
+          {/* Chat Input Bar - Sticky at Bottom */}
+          <div className="sticky bottom-0 z-10 p-4 border-t border-purple-900/60 bg-[#130b2c]/90 backdrop-blur-xl shrink-0">
             <form
               onSubmit={(e) => {
                 e.preventDefault();

@@ -167,13 +167,32 @@ export const SpineElongationCard: React.FC<SpineElongationCardProps> = ({
           <p className="text-sm text-slate-100 font-sans leading-relaxed">
             Spinal discs expand due to absent gravitational axial load. Active delta of <strong className={colorStyles.text}>+{spineElongation.toFixed(1)} cm</strong> requires daily ARED resistive deadlifts and countermeasure harness monitoring.
           </p>
+          <div className="pt-1 flex flex-wrap items-center gap-3 text-[11px] font-mono">
+            <a
+              href="https://www.nasa.gov/hrp/hazards/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[#00E5FF] hover:underline"
+            >
+              <span>ⓘ Source: NASA HRP Hazards</span>
+            </a>
+            <span className="text-slate-600">·</span>
+            <a
+              href="https://www.nasa.gov/hrp/risks/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[#00E5FF] hover:underline"
+            >
+              <span>ⓘ Source: NASA HRP Risks</span>
+            </a>
+          </div>
         </div>
 
         {onOpenContextModal && (
           <button
             type="button"
             onClick={onOpenContextModal}
-            className="shrink-0 px-4 py-2 rounded-lg bg-[#00E5FF]/15 hover:bg-[#00E5FF]/25 border border-[#00E5FF]/50 text-[#00E5FF] text-xs font-mono font-bold tracking-wider transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(0,229,255,0.2)] hover:shadow-[0_0_20px_rgba(0,229,255,0.4)]"
+            className="shrink-0 px-4 py-2 rounded-lg bg-[#00E5FF]/15 hover:bg-[#00E5FF]/25 border border-[#00E5FF]/50 text-[#00E5FF] text-xs font-mono font-bold tracking-wider transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(0,229,255,0.2)] hover:shadow-[0_0_20px_rgba(0,229,255,0.4)] cursor-pointer"
           >
             <BookOpen className="w-4 h-4 text-[#00E5FF]" />
             <span>LEARN MORE / CLINICAL CONTEXT</span>
@@ -183,3 +202,4 @@ export const SpineElongationCard: React.FC<SpineElongationCardProps> = ({
     </div>
   );
 };
+

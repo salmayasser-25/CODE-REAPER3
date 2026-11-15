@@ -45,13 +45,13 @@ export const TopNav: React.FC<TopNavProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[#00E5FF]/25 bg-[#050810]/80 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.8)]">
+    <header className="sticky top-0 z-40 shrink-0 w-full border-b border-[#00E5FF]/25 bg-[#050810]/80 backdrop-blur-xl shadow-[0_4px_30px_rgba(0,0,0,0.8)]">
       {/* Mandatory Simulated Demonstration Data Alert Strip */}
       <div className="w-full bg-[#FF8C00]/20 border-b border-[#FF8C00]/40 px-4 sm:px-6 py-1.5 text-xs text-[#FFB347] flex items-center justify-between font-mono shadow-[0_0_15px_rgba(255,140,0,0.15)]">
         <div className="flex items-center gap-2.5">
@@ -95,7 +95,7 @@ export const TopNav: React.FC<TopNavProps> = ({
         </div>
 
         {/* Zone 2: Navigation Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto py-1">
           {NAV_TABS.map((tab) => (
             <NavLink
               key={tab.id}
@@ -115,7 +115,7 @@ export const TopNav: React.FC<TopNavProps> = ({
 
         {/* Zone 3: Actions & Role-Based Access */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {onOpenRoleModal && (
+          {onOpenRoleModal && role === 'surgeon' && (
             <button
               type="button"
               onClick={onOpenRoleModal}
@@ -143,11 +143,11 @@ export const TopNav: React.FC<TopNavProps> = ({
           <button
             type="button"
             onClick={handleLogout}
-            title="Switch Role / Log Out"
+            title="Sign Out"
             className="px-3 py-2 text-xs font-mono font-bold rounded-lg border border-slate-700 bg-slate-900/90 text-slate-300 hover:text-white hover:border-slate-500 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">SWITCH ROLE</span>
+            <span className="hidden lg:inline">SIGN OUT</span>
           </button>
         </div>
       </div>

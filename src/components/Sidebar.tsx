@@ -118,26 +118,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Gauge,
       phase: 'Space Weather',
     },
-    {
-      id: 'surgeon-overview',
-      path: '/surgeon-overview',
-      label: 'Crew Medical Matrix',
-      sublabel: 'Flight Surgeon Oversight',
-      icon: LayoutDashboard,
-      phase: 'Surgeon Hub',
-    },
-    {
-      id: 'medical-assistant',
-      path: '/medical-assistant',
-      label: 'AI Medical Assistant',
-      sublabel: 'Triage & Surgeon Escalation',
-      icon: Bot,
-      phase: '4-Tier Triage',
-    },
+    ...(role === 'surgeon'
+      ? [
+          {
+            id: 'surgeon-overview',
+            path: '/surgeon-overview',
+            label: 'Crew Medical Matrix',
+            sublabel: 'Flight Surgeon Oversight',
+            icon: LayoutDashboard,
+            phase: 'Surgeon Hub',
+          },
+          {
+            id: 'medical-assistant',
+            path: '/medical-assistant',
+            label: 'AI Medical Assistant',
+            sublabel: 'Triage & Surgeon Escalation',
+            icon: Bot,
+            phase: '4-Tier Triage',
+          },
+        ]
+      : []),
   ];
 
   return (
-    <aside className="w-64 lg:w-72 shrink-0 border-r border-[#00E5FF]/25 bg-[#050810]/75 backdrop-blur-xl flex flex-col justify-between hidden md:flex min-h-[calc(100vh-4rem-25px)]">
+    <aside className="w-64 lg:w-72 shrink-0 sticky top-0 h-full max-h-screen overflow-y-auto border-r border-[#00E5FF]/25 bg-[#050810]/75 backdrop-blur-xl flex-col justify-between hidden md:flex">
       {/* Navigation section */}
       <div className="p-4 space-y-6">
         <div>
@@ -232,7 +236,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Bottom Crew Dossier Anchor */}
-      <div className="p-4 border-t border-slate-800 bg-[#070d1e]">
+      <div className="sticky bottom-0 p-4 border-t border-slate-800 bg-[#070d1e]/95 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-11 h-11 rounded-xl border border-[#00E5FF]/50 bg-[#00E5FF]/15 flex items-center justify-center font-black text-[#00E5FF] text-base font-['Chakra_Petch',sans-serif] shadow-[0_0_15px_rgba(0,229,255,0.25)]">

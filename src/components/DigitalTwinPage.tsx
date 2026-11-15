@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
-import { OrbitControls, Html } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -19,9 +19,11 @@ import {
   ArrowRight,
   ShieldCheck,
   ChevronRight,
-  Info
+  Info,
+  BookOpen
 } from 'lucide-react';
 import { AstronautProfile } from '../types/astronaut.js';
+import { ClinicalContextModal } from './ClinicalContextModal.js';
 
 const ECORCHE_MODEL_URL = '/models/ecorche-main/model/ecorche.meshopt.glb';
 
@@ -88,6 +90,51 @@ function StressZoneMesh({
     }
   });
 
+  const spriteRef = useRef<THREE.Sprite | null>(null);
+
+  const labelTexture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 112;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'rgba(5, 8, 16, 0.92)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 5;
+      const r = 20;
+      const w = canvas.width - 12;
+      const h = canvas.height - 12;
+      ctx.beginPath();
+      ctx.roundRect(6, 6, w, h, r);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffe4e6';
+      ctx.font = 'bold 26px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const clipped = label.length > 36 ? `${label.slice(0, 34)}...` : label;
+      ctx.fillText(clipped, canvas.width / 2, canvas.height / 2);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, [label, color]);
+
+  useEffect(() => {
+    return () => {
+      labelTexture.dispose();
+    };
+  }, [labelTexture]);
+
+  useFrame((state) => {
+    if (spriteRef.current) {
+      const t = state.clock.getElapsedTime();
+      spriteRef.current.position.y = 0.38 + Math.abs(Math.sin(t * 3.5)) * 0.05;
+    }
+  });
+
   return (
     <group position={position}>
       {/* Central Pulsing Stress Core Sphere */}
@@ -115,13 +162,10 @@ function StressZoneMesh({
         <meshBasicMaterial color={color} transparent opacity={0.6} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* Floating 3D Warning Label Badge */}
-      <Html position={[0, 0.38, 0]} center distanceFactor={6}>
-        <div className="px-3 py-1.5 rounded-xl bg-black/90 border-2 border-rose-500 text-rose-100 font-mono text-xs font-black whitespace-nowrap shadow-[0_0_20px_#f43f5e] flex items-center gap-1.5 animate-bounce">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-          <span>{label}</span>
-        </div>
-      </Html>
+      {/* Floating 3D Warning Label Sprite */}
+      <sprite ref={spriteRef} position={[0, 0.38, 0]} scale={[1.15, 0.2, 1]}>
+        <spriteMaterial map={labelTexture} transparent depthTest={false} />
+      </sprite>
     </group>
   );
 }
@@ -300,6 +344,7 @@ export const DigitalTwinPage: React.FC<DigitalTwinPageProps> = ({
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [simProgress, setSimProgress] = useState<number>(0);
   const [simResult, setSimResult] = useState<SimulationResult | null>(null);
+  const [isSpineContextOpen, setIsSpineContextOpen] = useState<boolean>(false);
 
   // Viewport & Layer Controls (matched with 3D Body Map)
   const [layerMode, setLayerMode] = useState<'all' | 'muscles' | 'skeleton'>('all');
@@ -477,8 +522,19 @@ export const DigitalTwinPage: React.FC<DigitalTwinPageProps> = ({
                 BIOMECHANICAL RISK TWIN
               </span>
             </div>
-            <p className="text-xs sm:text-sm font-sans text-slate-300 mt-1">
-              Simulate biomechanical risks before execution for <strong className="text-white">{profile.name}</strong> (Spine Delta: +{profile.spineElongation} cm).
+            <p className="text-xs sm:text-sm font-sans text-slate-300 mt-1 flex flex-wrap items-center gap-2">
+              <span>
+                Simulate biomechanical risks before execution for <strong className="text-white">{profile.name}</strong> (Spine Delta: +{profile.spineElongation} cm).
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSpineContextOpen(true)}
+                title="View NASA HRP Risk of Spaceflight-Induced Bone Changes & Reduced Musculoskeletal Fitness"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#00E5FF]/15 hover:bg-[#00E5FF]/25 border border-[#00E5FF]/45 text-[#00E5FF] text-[11px] font-mono font-bold transition-colors cursor-pointer"
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>Learn More</span>
+              </button>
             </p>
           </div>
         </div>
@@ -905,9 +961,32 @@ export const DigitalTwinPage: React.FC<DigitalTwinPageProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => {
-                    if (onSendToast) {
-                      onSendToast('Simulation risk dossier transmitted to Dr. Marcus Vance (MedCom Alpha)', 'info');
+                  onClick={async () => {
+                    try {
+                      await fetch('/api/pings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          astronautId: profile.id,
+                          source: 'digital_twin',
+                          severity: simResult.riskLevel === 'CRITICAL' ? 'critical' : 'warning',
+                          title: `Digital Twin Risk Alert: ${simResult.actionName}`,
+                          message: `${simResult.predictedConsequence} (Peak ${simResult.peakForceN} N vs limit ${simResult.safetyLimitN} N)`,
+                          recommendedAction: simResult.recommendation,
+                          telemetry: {
+                            spineElongation: profile.spineElongation,
+                            riskLevel: simResult.riskLevel,
+                            actionName: simResult.actionName,
+                          },
+                        }),
+                      });
+                      if (onSendToast) {
+                        onSendToast('Simulation risk dossier transmitted to Dr. Marcus Vance (MedCom Alpha)', 'info');
+                      }
+                    } catch {
+                      if (onSendToast) {
+                        onSendToast('Failed to transmit simulation risk dossier', 'error');
+                      }
                     }
                   }}
                   className="w-full sm:w-auto py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-mono font-bold transition-colors cursor-pointer"
@@ -919,6 +998,12 @@ export const DigitalTwinPage: React.FC<DigitalTwinPageProps> = ({
           )}
         </div>
       </div>
+
+      <ClinicalContextModal
+        isOpen={isSpineContextOpen}
+        onClose={() => setIsSpineContextOpen(false)}
+        spineElongation={profile.spineElongation}
+      />
     </div>
   );
 };

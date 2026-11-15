@@ -48,7 +48,7 @@ export const FlightSurgeonHeader: React.FC<FlightSurgeonHeaderProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[#00E5FF]/25 bg-[#050810]/85 backdrop-blur-2xl shadow-[0_4px_30px_rgba(0,0,0,0.85)]">
+    <header className="sticky top-0 z-40 shrink-0 w-full border-b border-[#00E5FF]/25 bg-[#050810]/85 backdrop-blur-2xl shadow-[0_4px_30px_rgba(0,0,0,0.85)]">
       {/* Flight Medicine Telemetry Alert Strip */}
       <div className="w-full bg-[#FF8C00]/15 border-b border-[#FF8C00]/30 px-4 sm:px-6 py-1 text-xs text-[#FFB347] flex items-center justify-between font-mono shadow-[0_0_15px_rgba(255,140,0,0.1)]">
         <div className="flex items-center gap-2.5">

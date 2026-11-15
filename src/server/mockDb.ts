@@ -29,6 +29,8 @@ import type {
   CommunicationChannel,
   DoctorResponseTimerState,
   EmergencyTriageState,
+  SurgeonOrder,
+  SurgeonOrderType,
 } from '../types/astronaut.ts';
 
 // Initial Mock Dataset for Dr. Salma Johnson as specified in requirements
@@ -66,21 +68,112 @@ export let currentAstronautProfile: AstronautProfile = {
   updatedAt: new Date().toISOString(),
 };
 
-export const getProfile = (): AstronautProfile => {
-  return currentAstronautProfile;
+const buildCrewSeedProfiles = (): Record<string, AstronautProfile> => {
+  const now = new Date().toISOString();
+  return {
+    'ASTRO-74-SJ': currentAstronautProfile,
+    'ASTRO-74-AR': {
+      id: 'ASTRO-74-AR',
+      name: 'Cmdr. Alex Reid',
+      callsign: 'Apex',
+      age: 41,
+      role: 'Station Commander / Flight Pilot',
+      missionId: 'EXP-74 / USOS COMMAND',
+      healthStatus: 'nominal',
+      photoUrl: '',
+      totalEvaHours: 42.0,
+      bloodType: 'A-Positive (A+)',
+      spineElongation: 1.8,
+      allergies: ['None Known'],
+      conditions: ['Nominal Microgravity Adaptation'],
+      assignedSurgeon: { ...currentAstronautProfile.assignedSurgeon },
+      heightCm: 181.0,
+      weightKg: 78.4,
+      restingHeartRate: 56,
+      spO2Baseline: 99,
+      radiationDoseMsv: 15.4,
+      missionElapsedDays: 84,
+      updatedAt: now,
+    },
+    'ASTRO-74-ER': {
+      id: 'ASTRO-74-ER',
+      name: 'Lt. Elena Rostova',
+      callsign: 'Valkyrie',
+      age: 34,
+      role: 'Lead Flight Engineer / EVA Specialist',
+      missionId: 'EXP-74 / COLUMBUS MODULE',
+      healthStatus: 'nominal',
+      photoUrl: '',
+      totalEvaHours: 36.5,
+      bloodType: 'B-Positive (B+)',
+      spineElongation: 2.1,
+      allergies: ['Latex (Mild Contact)'],
+      conditions: ['Post-EVA Forearm Flexor Recovery (Resolved)'],
+      assignedSurgeon: { ...currentAstronautProfile.assignedSurgeon },
+      heightCm: 172.0,
+      weightKg: 63.0,
+      restingHeartRate: 55,
+      spO2Baseline: 99,
+      radiationDoseMsv: 15.1,
+      missionElapsedDays: 84,
+      updatedAt: now,
+    },
+    'ASTRO-74-KS': {
+      id: 'ASTRO-74-KS',
+      name: 'Dr. Kenji Sato',
+      callsign: 'Ronin',
+      age: 38,
+      role: 'Science Officer / Robotics Specialist',
+      missionId: 'EXP-74 / JEM KIBO LAB',
+      healthStatus: 'nominal',
+      photoUrl: '',
+      totalEvaHours: 18.0,
+      bloodType: 'O-Negative (O-)',
+      spineElongation: 1.5,
+      allergies: [],
+      conditions: ['Nominal Microgravity Adaptation'],
+      assignedSurgeon: { ...currentAstronautProfile.assignedSurgeon },
+      heightCm: 175.0,
+      weightKg: 69.5,
+      restingHeartRate: 60,
+      spO2Baseline: 99,
+      radiationDoseMsv: 14.2,
+      missionElapsedDays: 84,
+      updatedAt: now,
+    },
+  };
 };
 
-export const updateProfile = (data: UpdateProfileInput): AstronautProfile => {
-  currentAstronautProfile = {
-    ...currentAstronautProfile,
+let astronautProfiles: Record<string, AstronautProfile> | null = null;
+const ensureProfilesMap = (): Record<string, AstronautProfile> => {
+  if (!astronautProfiles) {
+    astronautProfiles = buildCrewSeedProfiles();
+  }
+  astronautProfiles['ASTRO-74-SJ'] = currentAstronautProfile;
+  return astronautProfiles;
+};
+
+export const getProfile = (astronautId = 'ASTRO-74-SJ'): AstronautProfile => {
+  const map = ensureProfilesMap();
+  return map[astronautId] || currentAstronautProfile;
+};
+
+export const updateProfile = (data: UpdateProfileInput, astronautId = 'ASTRO-74-SJ'): AstronautProfile => {
+  const map = ensureProfilesMap();
+  const target = map[astronautId] || currentAstronautProfile;
+  const updated: AstronautProfile = {
+    ...target,
     ...data,
-    // Deep merge assignedSurgeon if provided
     assignedSurgeon: data.assignedSurgeon
-      ? { ...currentAstronautProfile.assignedSurgeon, ...data.assignedSurgeon }
-      : currentAstronautProfile.assignedSurgeon,
+      ? { ...target.assignedSurgeon, ...data.assignedSurgeon }
+      : target.assignedSurgeon,
     updatedAt: new Date().toISOString(),
   };
-  return currentAstronautProfile;
+  map[updated.id] = updated;
+  if (updated.id === 'ASTRO-74-SJ') {
+    currentAstronautProfile = updated;
+  }
+  return updated;
 };
 
 // 7-day Heart Rate and Biometric History
@@ -106,17 +199,56 @@ export let currentVitals: VitalsData = {
   ],
 };
 
-export const getVitals = (): VitalsData => {
-  return currentVitals;
+const makeSeedVitals = (hr: number, bpSys: number, bpDia: number, spO2: number, temp: number, weightKg: number, baselineHr: number, sleepHours = 7.1): VitalsData => ({
+  heartRate: hr,
+  bloodPressureSys: bpSys,
+  bloodPressureDia: bpDia,
+  spO2,
+  temperature: temp,
+  respiratoryRate: 14,
+  sleepHours,
+  weightKg,
+  hrvMs: 68,
+  timestamp: new Date().toISOString(),
+  historicalHeartRate: currentVitals.historicalHeartRate.map((p, idx, arr) => ({
+    ...p,
+    baseline: baselineHr,
+    hr: idx === arr.length - 1 ? hr : Math.max(50, hr - (arr.length - 1 - idx)),
+  })),
+});
+
+let astronautVitals: Record<string, VitalsData> | null = null;
+const ensureVitalsMap = (): Record<string, VitalsData> => {
+  if (!astronautVitals) {
+    astronautVitals = {
+      'ASTRO-74-SJ': currentVitals,
+      'ASTRO-74-AR': makeSeedVitals(64, 120, 78, 99, 36.7, 78.4, 56, 7.2),
+      'ASTRO-74-ER': makeSeedVitals(61, 116, 74, 98, 36.9, 63.0, 55, 7.4),
+      'ASTRO-74-KS': makeSeedVitals(66, 122, 80, 99, 36.6, 69.5, 60, 6.9),
+    };
+  }
+  astronautVitals['ASTRO-74-SJ'] = currentVitals;
+  return astronautVitals;
 };
 
-export const updateVitals = (data: Partial<VitalsData>): VitalsData => {
-  currentVitals = {
-    ...currentVitals,
+export const getVitals = (astronautId = 'ASTRO-74-SJ'): VitalsData => {
+  const map = ensureVitalsMap();
+  return map[astronautId] || currentVitals;
+};
+
+export const updateVitals = (data: Partial<VitalsData>, astronautId = 'ASTRO-74-SJ'): VitalsData => {
+  const map = ensureVitalsMap();
+  const prev = map[astronautId] || currentVitals;
+  const updated: VitalsData = {
+    ...prev,
     ...data,
     timestamp: new Date().toISOString(),
   };
-  return currentVitals;
+  map[astronautId] = updated;
+  if (astronautId === 'ASTRO-74-SJ') {
+    currentVitals = updated;
+  }
+  return updated;
 };
 
 // Check-ins dataset
@@ -149,8 +281,11 @@ export let currentCheckIns: DailyCheckIn[] = [
   },
 ];
 
-export const getCheckIns = (): DailyCheckIn[] => {
-  return currentCheckIns;
+export const getCheckIns = (astronautId?: string): DailyCheckIn[] => {
+  if (astronautId && astronautId !== 'ASTRO-74-SJ') {
+    return currentCheckIns.filter((c) => c.astronautId === astronautId);
+  }
+  return astronautId ? currentCheckIns.filter((c) => c.astronautId === astronautId) : currentCheckIns;
 };
 
 export const addCheckIn = (data: Omit<DailyCheckIn, 'id' | 'timestamp'>): DailyCheckIn => {
@@ -167,13 +302,14 @@ export const addCheckIn = (data: Omit<DailyCheckIn, 'id' | 'timestamp'>): DailyC
     title: `Daily Health Check-in (Day ${newCheckIn.missionDay})`,
     summary: `Mood: ${newCheckIn.mood} · Energy: ${newCheckIn.energyLevel}/10 · Sleep: ${newCheckIn.sleepHours}h (${newCheckIn.sleepQuality})`,
     details: {
+      astronautId: newCheckIn.astronautId,
       hydrationLiters: newCheckIn.hydrationLiters,
       symptoms: newCheckIn.spaceAdaptationSymptoms,
       notes: newCheckIn.notes,
     },
     severity: newCheckIn.energyLevel < 5 ? 'warning' : 'nominal',
     badge: 'DAILY LOG',
-  });
+  }, newCheckIn.astronautId);
 
   return newCheckIn;
 };
@@ -188,7 +324,7 @@ export let currentTimelineEvents: TimelineEvent[] = [
     timestamp: new Date(Date.now() - 3600000 * 1).toISOString(),
     severity: 'warning',
     badge: 'VITALS',
-    details: { hr: 72, bp: '118/76', spo2: 99, temp: 36.8, sleep: 5.9, weight: 59.2 },
+    details: { astronautId: 'ASTRO-74-SJ', hr: 72, bp: '118/76', spo2: 99, temp: 36.8, sleep: 5.9, weight: 59.2 },
   },
   {
     id: 'EVT-02',
@@ -198,6 +334,7 @@ export let currentTimelineEvents: TimelineEvent[] = [
     timestamp: new Date(Date.now() - 3600000 * 1.5).toISOString(),
     severity: 'info',
     badge: 'AI INSIGHT',
+    details: { astronautId: 'ASTRO-74-SJ' },
   },
   {
     id: 'EVT-03',
@@ -207,6 +344,7 @@ export let currentTimelineEvents: TimelineEvent[] = [
     timestamp: new Date(Date.now() - 3600000 * 3).toISOString(),
     severity: 'nominal',
     badge: 'CHECK-IN',
+    details: { astronautId: 'ASTRO-74-SJ' },
   },
   {
     id: 'EVT-04',
@@ -216,6 +354,7 @@ export let currentTimelineEvents: TimelineEvent[] = [
     timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
     severity: 'warning',
     badge: 'SYMPTOM',
+    details: { astronautId: 'ASTRO-74-SJ' },
   },
   {
     id: 'EVT-05',
@@ -225,6 +364,7 @@ export let currentTimelineEvents: TimelineEvent[] = [
     timestamp: new Date(Date.now() - 3600000 * 8).toISOString(),
     severity: 'nominal',
     badge: 'EXERCISE',
+    details: { astronautId: 'ASTRO-74-SJ' },
   },
   {
     id: 'EVT-06',
@@ -234,16 +374,19 @@ export let currentTimelineEvents: TimelineEvent[] = [
     timestamp: new Date(Date.now() - 3600000 * 22).toISOString(),
     severity: 'nominal',
     badge: 'SYMPTOM',
+    details: { astronautId: 'ASTRO-74-SJ' },
   },
 ];
 
-export const getTimelineEvents = (): TimelineEvent[] => {
-  return currentTimelineEvents;
+export const getTimelineEvents = (astronautId?: string): TimelineEvent[] => {
+  if (!astronautId) return currentTimelineEvents;
+  return currentTimelineEvents.filter((e) => !e.details?.astronautId || e.details.astronautId === astronautId);
 };
 
-export const addTimelineEvent = (event: Omit<TimelineEvent, 'id' | 'timestamp'>): TimelineEvent => {
+export const addTimelineEvent = (event: Omit<TimelineEvent, 'id' | 'timestamp'>, astronautId = 'ASTRO-74-SJ'): TimelineEvent => {
   const newEvent: TimelineEvent = {
     ...event,
+    details: { astronautId, ...(event.details || {}) },
     id: `EVT-${String(currentTimelineEvents.length + 1).padStart(2, '0')}`,
     timestamp: new Date().toISOString(),
   };
@@ -253,6 +396,7 @@ export const addTimelineEvent = (event: Omit<TimelineEvent, 'id' | 'timestamp'>)
 
 // Log Daily Vitals Form Action
 export const logDailyVitals = (data: {
+  astronautId?: string;
   heartRate: number;
   bloodPressureSys: number;
   bloodPressureDia: number;
@@ -261,19 +405,22 @@ export const logDailyVitals = (data: {
   sleepHours: number;
   weightKg?: number;
 }): VitalsData => {
-  // 1. Update current vitals
-  currentVitals = {
-    ...currentVitals,
+  const targetId = data.astronautId || 'ASTRO-74-SJ';
+  const vitalsMap = ensureVitalsMap();
+  const prevVitals = vitalsMap[targetId] || currentVitals;
+  const targetProfile = getProfile(targetId);
+
+  const updatedVitals: VitalsData = {
+    ...prevVitals,
     heartRate: data.heartRate,
     bloodPressureSys: data.bloodPressureSys,
     bloodPressureDia: data.bloodPressureDia,
     spO2: data.spO2,
     temperature: data.temperature,
     sleepHours: data.sleepHours,
-    weightKg: data.weightKg ?? currentVitals.weightKg ?? 59.2,
+    weightKg: data.weightKg ?? prevVitals.weightKg ?? targetProfile.weightKg,
     timestamp: new Date().toISOString(),
-    // Update today's point in historical chart
-    historicalHeartRate: currentVitals.historicalHeartRate.map((point) => {
+    historicalHeartRate: prevVitals.historicalHeartRate.map((point) => {
       if (point.date === 'Today') {
         return {
           ...point,
@@ -286,27 +433,28 @@ export const logDailyVitals = (data: {
     }),
   };
 
+  vitalsMap[targetId] = updatedVitals;
+  if (targetId === 'ASTRO-74-SJ') {
+    currentVitals = updatedVitals;
+  }
+
   // 2. Update astronaut profile weight if provided
   if (data.weightKg) {
-    currentAstronautProfile = {
-      ...currentAstronautProfile,
-      weightKg: data.weightKg,
-      updatedAt: new Date().toISOString(),
-    };
+    updateProfile({ weightKg: data.weightKg }, targetId);
   }
 
   // 3. Log event into medical timeline
-  const hrDelta = data.heartRate - currentAstronautProfile.restingHeartRate;
+  const hrDelta = data.heartRate - targetProfile.restingHeartRate;
   addTimelineEvent({
     type: 'vitals',
-    title: 'Daily Bio-Telemetry Logged by Astronaut',
+    title: `Daily Bio-Telemetry Logged (${targetProfile.callsign})`,
     summary: `HR: ${data.heartRate} bpm (${hrDelta > 0 ? `+${hrDelta}` : hrDelta} vs baseline) · BP: ${data.bloodPressureSys}/${data.bloodPressureDia} mmHg · SpO2: ${data.spO2}% · Sleep: ${data.sleepHours} hrs`,
-    details: { ...data },
+    details: { ...data, astronautId: targetId },
     severity: hrDelta > 10 || data.spO2 < 96 ? 'warning' : 'nominal',
     badge: 'VITALS',
-  });
+  }, targetId);
 
-  return currentVitals;
+  return updatedVitals;
 };
 
 // Symptom Reports (3D Anatomical Body Logging)
@@ -333,18 +481,48 @@ export let currentSymptoms: SymptomReport[] = [
   },
 ];
 
-export const getSymptoms = (): SymptomReport[] => {
-  return currentSymptoms;
+let astronautSymptoms: Record<string, SymptomReport[]> | null = null;
+const ensureSymptomsMap = (): Record<string, SymptomReport[]> => {
+  if (!astronautSymptoms) {
+    astronautSymptoms = {
+      'ASTRO-74-SJ': currentSymptoms,
+      'ASTRO-74-AR': [],
+      'ASTRO-74-ER': [
+        {
+          id: 'SYM-ER-01',
+          bodyPart: 'Right Forearm Flexors',
+          painType: 'Dull',
+          intensity: 2,
+          notes: 'Post-EVA-1 glove pressure fatigue, resolved after recovery block.',
+          timestamp: new Date(Date.now() - 3600000 * 30).toISOString(),
+          status: 'resolved',
+        },
+      ],
+      'ASTRO-74-KS': [],
+    };
+  }
+  astronautSymptoms['ASTRO-74-SJ'] = currentSymptoms;
+  return astronautSymptoms;
 };
 
-export const addSymptom = (report: Omit<SymptomReport, 'id' | 'timestamp'>): SymptomReport => {
+export const getSymptoms = (astronautId = 'ASTRO-74-SJ'): SymptomReport[] => {
+  const map = ensureSymptomsMap();
+  return map[astronautId] || [];
+};
+
+export const addSymptom = (report: Omit<SymptomReport, 'id' | 'timestamp'>, astronautId = 'ASTRO-74-SJ'): SymptomReport => {
+  const map = ensureSymptomsMap();
+  const list = map[astronautId] || [];
   const newReport: SymptomReport = {
     ...report,
-    id: `SYM-84-${String(currentSymptoms.length + 1).padStart(2, '0')}`,
+    id: `SYM-84-${String(list.length + currentSymptoms.length + 1).padStart(2, '0')}`,
     timestamp: new Date().toISOString(),
     status: report.status || 'active',
   };
-  currentSymptoms = [newReport, ...currentSymptoms];
+  map[astronautId] = [newReport, ...list];
+  if (astronautId === 'ASTRO-74-SJ') {
+    currentSymptoms = map[astronautId];
+  }
 
   // Add timeline event
   addTimelineEvent({
@@ -353,16 +531,61 @@ export const addSymptom = (report: Omit<SymptomReport, 'id' | 'timestamp'>): Sym
     summary: `${newReport.painType} pain (Intensity: ${newReport.intensity}/10). Notes: ${newReport.notes || 'No extra notes.'}`,
     severity: newReport.intensity > 5 ? 'alert' : 'warning',
     badge: 'SYMPTOM',
-    details: { bodyPart: newReport.bodyPart, intensity: newReport.intensity, painType: newReport.painType },
-  });
+    details: { astronautId, bodyPart: newReport.bodyPart, intensity: newReport.intensity, painType: newReport.painType },
+  }, astronautId);
 
   return newReport;
 };
 
-export const deleteSymptom = (id: string): boolean => {
-  const initialLength = currentSymptoms.length;
-  currentSymptoms = currentSymptoms.filter((s) => s.id !== id);
-  return currentSymptoms.length < initialLength;
+export const updateSymptomStatus = (
+  id: string,
+  status: 'active' | 'monitoring' | 'resolved',
+  notes?: string,
+  astronautId?: string
+): SymptomReport | null => {
+  const map = ensureSymptomsMap();
+  const keys = astronautId ? [astronautId] : Object.keys(map);
+  for (const key of keys) {
+    const list = map[key] || [];
+    const idx = list.findIndex((s) => s.id === id);
+    if (idx !== -1) {
+      list[idx] = {
+        ...list[idx],
+        status,
+        notes: notes !== undefined ? notes : list[idx].notes,
+      };
+      if (key === 'ASTRO-74-SJ') {
+        currentSymptoms = list;
+      }
+      addTimelineEvent({
+        type: 'symptom',
+        title: `Symptom Status Updated: ${list[idx].bodyPart}`,
+        summary: `Flight Surgeon updated symptom status to "${status.toUpperCase()}".`,
+        severity: status === 'resolved' ? 'nominal' : 'info',
+        badge: 'SYMPTOM UPDATE',
+        details: { astronautId: key, symptomId: id, status },
+      }, key);
+      return list[idx];
+    }
+  }
+  return null;
+};
+
+export const deleteSymptom = (id: string, astronautId?: string): boolean => {
+  const map = ensureSymptomsMap();
+  const keys = astronautId ? [astronautId] : Object.keys(map);
+  for (const key of keys) {
+    const list = map[key] || [];
+    const filtered = list.filter((s) => s.id !== id);
+    if (filtered.length < list.length) {
+      map[key] = filtered;
+      if (key === 'ASTRO-74-SJ') {
+        currentSymptoms = filtered;
+      }
+      return true;
+    }
+  }
+  return false;
 };
 
 // ─── Fitness / Space Exercise Data ──────────────────────────────────────────
@@ -520,12 +743,37 @@ export const getExercisesByCategory = (category: ExerciseCategory): SpaceExercis
   return spaceExercises.filter((e) => e.category === category).map((e) => ({ ...e }));
 };
 
-export const evaluateExercisesForAstronaut = (): {
+export let currentSurgeonOrders: SurgeonOrder[] = [];
+const surgeonClearedExercisesByAstronaut: Record<string, Set<string>> = {};
+
+const getClearedSet = (astronautId: string): Set<string> => {
+  if (!surgeonClearedExercisesByAstronaut[astronautId]) {
+    surgeonClearedExercisesByAstronaut[astronautId] = new Set<string>();
+  }
+  return surgeonClearedExercisesByAstronaut[astronautId];
+};
+
+export const getSurgeonOrders = (astronautId?: string): SurgeonOrder[] => {
+  if (astronautId) {
+    return currentSurgeonOrders.filter((o) => o.astronautId === astronautId);
+  }
+  return currentSurgeonOrders;
+};
+
+export const evaluateExercisesForAstronaut = (astronautId = 'ASTRO-74-SJ'): {
   exercises: SpaceExercise[];
   restricted: { exerciseId: string; reason: string }[];
+  approvedExerciseIds: string[];
 } => {
-  const profile = getProfile();
-  const symptoms = getSymptoms();
+  const profile = getProfile(astronautId);
+  const symptoms = getSymptoms(astronautId);
+  const activeRestrictions = currentMedicalRestrictions.filter(
+    (r) => r.astronautId === astronautId && r.status === 'Active'
+  );
+  const activeApprovalOrders = currentSurgeonOrders.filter(
+    (o) => o.astronautId === astronautId && o.status === 'Active' && o.type === 'approve_exercise'
+  );
+  const clearedSet = getClearedSet(astronautId);
 
   // Collect all active condition/symptom keywords for matching
   const activeConditionKeys: string[] = [];
@@ -540,7 +788,6 @@ export const evaluateExercisesForAstronaut = (): {
     if (cond.toLowerCase().includes('cervical disc')) activeConditionKeys.push('Cervical Disc Decompression');
   }
 
-  // Also check active symptoms for relevant conditions
   for (const sym of symptoms) {
     if (sym.status === 'resolved') continue;
     const lower = (sym.bodyPart + ' ' + sym.notes).toLowerCase();
@@ -555,13 +802,56 @@ export const evaluateExercisesForAstronaut = (): {
     }
   }
 
-  // If spine elongation > 3cm, always flag spinal elongation
   if (profile.spineElongation > 3 && !activeConditionKeys.includes('Spinal Elongation')) {
     activeConditionKeys.push('Spinal Elongation');
   }
 
   const restricted: { exerciseId: string; reason: string }[] = [];
+  const approvedExerciseIds: string[] = [];
+
   const exercises: SpaceExercise[] = spaceExercises.map((ex) => {
+    // 1. Check explicit Surgeon Approval Order or Lifted Restriction clearance
+    const matchingOrder = activeApprovalOrders.find(
+      (o) =>
+        o.exerciseId === ex.id ||
+        (o.exerciseName && o.exerciseName.toLowerCase() === ex.name.toLowerCase())
+    );
+    const isClearedByLift = clearedSet.has(ex.id) || clearedSet.has(ex.name.toLowerCase());
+
+    if (matchingOrder || isClearedByLift) {
+      approvedExerciseIds.push(ex.id);
+      return {
+        ...ex,
+        status: 'available' as const,
+        surgeonApproved: true,
+        approvalOrderId: matchingOrder?.id,
+        warningMessage: undefined,
+        restrictionReason: undefined,
+      };
+    }
+
+    // 2. Check explicit Active Medical Restrictions from Flight Surgeon
+    const matchingRestriction = activeRestrictions.find((r) =>
+      r.restrictedExercises.some(
+        (name) =>
+          name.toLowerCase() === ex.name.toLowerCase() ||
+          name.toLowerCase() === ex.id.toLowerCase() ||
+          ex.name.toLowerCase().includes(name.toLowerCase())
+      )
+    );
+    if (matchingRestriction) {
+      const reason = `${matchingRestriction.name}: ${matchingRestriction.clinicalRationale || matchingRestriction.description}`;
+      restricted.push({ exerciseId: ex.id, reason });
+      return {
+        ...ex,
+        status: 'restricted' as const,
+        surgeonApproved: false,
+        restrictionReason: reason,
+        warningMessage: `⚠ ${reason}`,
+      };
+    }
+
+    // 3. Check physiological contraindications
     const matchingContraindications = ex.contraindications.filter((ci) =>
       activeConditionKeys.includes(ci)
     );
@@ -572,11 +862,12 @@ export const evaluateExercisesForAstronaut = (): {
       return {
         ...ex,
         status: 'restricted' as const,
+        surgeonApproved: false,
+        restrictionReason: reason,
         warningMessage: `⚠ ${reason}. Consult Flight Surgeon before performing this exercise.`,
       };
     }
 
-    // High-value safe countermeasures get recommended status
     if (
       ex.id === 'ex-resistive-band-circuit' ||
       ex.id === 'ex-core-stabilization' ||
@@ -588,7 +879,7 @@ export const evaluateExercisesForAstronaut = (): {
     return { ...ex };
   });
 
-  return { exercises, restricted };
+  return { exercises, restricted, approvedExerciseIds };
 };
 
 // ─── Completed Workout Sessions Log ─────────────────────────────────────────
@@ -609,27 +900,48 @@ export let completedWorkoutSessions: WorkoutSessionLog[] = [
   },
 ];
 
-export const getWorkoutSessions = (): WorkoutSessionLog[] => {
-  return completedWorkoutSessions;
+let astronautWorkoutSessions: Record<string, WorkoutSessionLog[]> | null = null;
+const ensureSessionsMap = (): Record<string, WorkoutSessionLog[]> => {
+  if (!astronautWorkoutSessions) {
+    astronautWorkoutSessions = {
+      'ASTRO-74-SJ': completedWorkoutSessions,
+      'ASTRO-74-AR': [],
+      'ASTRO-74-ER': [],
+      'ASTRO-74-KS': [],
+    };
+  }
+  astronautWorkoutSessions['ASTRO-74-SJ'] = completedWorkoutSessions;
+  return astronautWorkoutSessions;
+};
+
+export const getWorkoutSessions = (astronautId = 'ASTRO-74-SJ'): WorkoutSessionLog[] => {
+  const map = ensureSessionsMap();
+  return map[astronautId] || [];
 };
 
 export const logWorkoutSession = (
-  session: Omit<WorkoutSessionLog, 'id' | 'completedAt'>
+  session: Omit<WorkoutSessionLog, 'id' | 'completedAt'>,
+  astronautId = 'ASTRO-74-SJ'
 ): WorkoutSessionLog => {
+  const map = ensureSessionsMap();
+  const list = map[astronautId] || [];
   const newSession: WorkoutSessionLog = {
     ...session,
-    id: `WKT-84-${String(completedWorkoutSessions.length + 1).padStart(2, '0')}`,
+    id: `WKT-84-${String(list.length + completedWorkoutSessions.length + 1).padStart(2, '0')}`,
     completedAt: new Date().toISOString(),
   };
 
-  completedWorkoutSessions = [newSession, ...completedWorkoutSessions];
+  map[astronautId] = [newSession, ...list];
+  if (astronautId === 'ASTRO-74-SJ') {
+    completedWorkoutSessions = map[astronautId];
+  }
 
-  // Synchronize with Unified Medical & Telemetry Timeline
   addTimelineEvent({
     type: 'exercise_eva',
     title: `Countermeasure Completed: ${newSession.exerciseName}`,
     summary: `Equipment: ${newSession.equipment} · Duration: ${newSession.durationMinutes} min · Energy Output: ${newSession.caloriesBurned} kcal · Avg HR: ${newSession.avgHeartRate} bpm (Peak ${newSession.peakHeartRate} bpm)`,
     details: {
+      astronautId,
       exerciseId: newSession.exerciseId,
       equipment: newSession.equipment,
       durationMinutes: newSession.durationMinutes,
@@ -640,7 +952,7 @@ export const logWorkoutSession = (
     },
     severity: 'nominal',
     badge: 'EXERCISE',
-  });
+  }, astronautId);
 
   return newSession;
 };
@@ -727,35 +1039,47 @@ export let currentCrewMembers: CrewMemberSummary[] = [
 ];
 
 export const getCrewMembers = (): CrewMemberSummary[] => {
-  // Sync Dr. Salma with live vitals and profile state
-  const profile = getProfile();
-  const vitals = getVitals();
-  const symptoms = getSymptoms();
-  const activeSymptoms = symptoms.filter((s) => s.status !== 'resolved');
-  const activeRestrictions = currentMedicalRestrictions.filter(
-    (r) => r.astronautId === profile.id && r.status === 'Active'
-  );
-
   return currentCrewMembers.map((member) => {
-    if (member.id === profile.id) {
-      return {
-        ...member,
-        name: profile.name,
-        callsign: profile.callsign,
-        role: profile.role,
-        photoUrl: profile.photoUrl,
-        healthStatus: profile.healthStatus === 'nominal' && activeRestrictions.length > 0 ? 'monitoring' : profile.healthStatus,
-        heartRate: vitals.heartRate,
-        bloodPressure: `${vitals.bloodPressureSys}/${vitals.bloodPressureDia}`,
-        spO2: vitals.spO2,
-        temperature: vitals.temperature,
-        latestSymptom: activeSymptoms.length > 0 ? `${activeSymptoms[0].bodyPart} (${activeSymptoms[0].intensity}/10)` : 'None Reported',
-        activeRestrictionsCount: activeRestrictions.length,
-        spineElongation: profile.spineElongation,
-        evaHours: profile.totalEvaHours,
-      };
-    }
-    return member;
+    const profile = getProfile(member.id);
+    const vitals = getVitals(member.id);
+    const symptoms = getSymptoms(member.id);
+    const activeSymptoms = symptoms.filter((s) => s.status !== 'resolved');
+    const activeRestrictions = currentMedicalRestrictions.filter(
+      (r) => r.astronautId === member.id && r.status === 'Active'
+    );
+
+    const hasCriticalAlert = currentMedicalAlerts.some(
+      (a) => a.astronautId === member.id && a.severity === 'critical' && !a.isAcknowledged
+    );
+    const derivedHealthStatus =
+      hasCriticalAlert && member.healthStatus === 'critical'
+        ? 'critical'
+        : profile.healthStatus === 'nominal' && activeRestrictions.length > 0
+        ? 'monitoring'
+        : profile.healthStatus;
+
+    return {
+      ...member,
+      name: profile.name,
+      callsign: profile.callsign,
+      role: profile.role,
+      missionId: profile.missionId,
+      photoUrl: profile.photoUrl,
+      healthStatus: derivedHealthStatus,
+      heartRate: vitals.heartRate,
+      bloodPressure: `${vitals.bloodPressureSys}/${vitals.bloodPressureDia}`,
+      spO2: vitals.spO2,
+      temperature: vitals.temperature,
+      latestSymptom:
+        activeSymptoms.length > 0
+          ? `${activeSymptoms[0].bodyPart} (${activeSymptoms[0].intensity}/10)`
+          : member.latestSymptom && activeSymptoms.length === 0 && member.id === 'ASTRO-74-ER'
+          ? 'Resolved EVA Forearm Fatigue'
+          : 'None Reported',
+      activeRestrictionsCount: activeRestrictions.length,
+      spineElongation: profile.spineElongation,
+      evaHours: profile.totalEvaHours,
+    };
   });
 };
 
@@ -816,11 +1140,33 @@ export const getRestrictions = (astronautId?: string): MedicalRestriction[] => {
 export const addRestriction = (
   restriction: Omit<MedicalRestriction, 'id'>
 ): MedicalRestriction => {
+  const targetProfile = getProfile(restriction.astronautId);
   const newRes: MedicalRestriction = {
     ...restriction,
+    astronautName: restriction.astronautName || targetProfile.name,
     id: `RES-74-${String(currentMedicalRestrictions.length + 1).padStart(2, '0')}`,
   };
   currentMedicalRestrictions = [newRes, ...currentMedicalRestrictions];
+
+  // If newly active restriction targets exercises, remove any prior lift-clearances or active approvals for them
+  if (newRes.status === 'Active' && newRes.restrictedExercises.length > 0) {
+    const clearedSet = getClearedSet(newRes.astronautId);
+    for (const exLabel of newRes.restrictedExercises) {
+      clearedSet.delete(exLabel.toLowerCase());
+      const matchingEx = spaceExercises.find(
+        (e) => e.name.toLowerCase() === exLabel.toLowerCase() || e.id.toLowerCase() === exLabel.toLowerCase()
+      );
+      if (matchingEx) {
+        clearedSet.delete(matchingEx.id);
+        clearedSet.delete(matchingEx.name.toLowerCase());
+        currentSurgeonOrders.forEach((o) => {
+          if (o.astronautId === newRes.astronautId && o.status === 'Active' && o.type === 'approve_exercise' && o.exerciseId === matchingEx.id) {
+            o.status = 'Revoked';
+          }
+        });
+      }
+    }
+  }
 
   // Log to medical timeline
   addTimelineEvent({
@@ -830,7 +1176,7 @@ export const addRestriction = (
     severity: newRes.severity === 'High' ? 'alert' : 'warning',
     badge: 'RESTRICTION',
     details: { ...newRes },
-  });
+  }, newRes.astronautId);
 
   return newRes;
 };
@@ -842,22 +1188,48 @@ export const updateRestriction = (
   const index = currentMedicalRestrictions.findIndex((r) => r.id === id);
   if (index === -1) return null;
 
-  currentMedicalRestrictions[index] = {
+  const updated: MedicalRestriction = {
     ...currentMedicalRestrictions[index],
     ...updates,
   };
+  currentMedicalRestrictions[index] = updated;
 
   if (updates.status === 'Lifted') {
+    const clearedSet = getClearedSet(updated.astronautId);
+    for (const exLabel of updated.restrictedExercises) {
+      clearedSet.add(exLabel.toLowerCase());
+      const matchingEx = spaceExercises.find(
+        (e) => e.name.toLowerCase() === exLabel.toLowerCase() || e.id.toLowerCase() === exLabel.toLowerCase()
+      );
+      if (matchingEx) {
+        clearedSet.add(matchingEx.id);
+        clearedSet.add(matchingEx.name.toLowerCase());
+      }
+    }
+
     addTimelineEvent({
       type: 'restriction',
-      title: `Medical Restriction Lifted: ${currentMedicalRestrictions[index].name}`,
-      summary: `Flight Surgeon lifted restriction for ${currentMedicalRestrictions[index].astronautName}`,
+      title: `Medical Restriction Lifted: ${updated.name}`,
+      summary: `Flight Surgeon lifted restriction for ${updated.astronautName} — Cleared exercises: ${updated.restrictedExercises.join(', ') || 'All'}`,
       severity: 'nominal',
       badge: 'RESTRICTION CLEARED',
-    });
+      details: { astronautId: updated.astronautId, restrictionId: updated.id },
+    }, updated.astronautId);
+  } else if (updates.status === 'Active') {
+    const clearedSet = getClearedSet(updated.astronautId);
+    for (const exLabel of updated.restrictedExercises) {
+      clearedSet.delete(exLabel.toLowerCase());
+      const matchingEx = spaceExercises.find(
+        (e) => e.name.toLowerCase() === exLabel.toLowerCase() || e.id.toLowerCase() === exLabel.toLowerCase()
+      );
+      if (matchingEx) {
+        clearedSet.delete(matchingEx.id);
+        clearedSet.delete(matchingEx.name.toLowerCase());
+      }
+    }
   }
 
-  return currentMedicalRestrictions[index];
+  return updated;
 };
 
 export const deleteRestriction = (id: string): boolean => {
@@ -1169,40 +1541,108 @@ export const getMessages = (conversationId: string): MedicalMessage[] => {
   return currentMessages[conversationId] || [];
 };
 
+export const markConversationRead = (conversationId: string) => {
+  const conv = currentConversations.find((c) => c.id === conversationId);
+  if (conv) conv.unreadCount = 0;
+};
+
+export interface SendMedicalMessageOptions {
+  conversationId: string;
+  content: string;
+  messageType?: 'clinical_directive' | 'telemetry_alert' | 'routine' | 'clearance';
+  priority?: 'normal' | 'urgent' | 'priority';
+  senderId?: string;
+  senderName?: string;
+  senderRole?: string;
+  isSurgeon?: boolean;
+  sender?: 'astronaut' | 'surgeon';
+  astronautId?: string;
+  isEmergency?: boolean;
+  hasTelemetry?: boolean;
+  telemetryData?: {
+    hr: number;
+    bp: string;
+    spO2: number;
+    spineDelta: number;
+  };
+}
+
 export const sendMedicalMessage = (
-  conversationId: string,
-  content: string,
-  messageType: 'clinical_directive' | 'telemetry_alert' | 'routine' | 'clearance' = 'routine',
-  priority: 'normal' | 'urgent' | 'priority' = 'normal'
+  conversationIdOrOpts: string | SendMedicalMessageOptions,
+  contentArg?: string,
+  messageTypeArg: 'clinical_directive' | 'telemetry_alert' | 'routine' | 'clearance' = 'routine',
+  priorityArg: 'normal' | 'urgent' | 'priority' = 'normal'
 ): MedicalMessage => {
+  const opts: SendMedicalMessageOptions =
+    typeof conversationIdOrOpts === 'string'
+      ? {
+          conversationId: conversationIdOrOpts,
+          content: contentArg || '',
+          messageType: messageTypeArg,
+          priority: priorityArg,
+          isSurgeon: true,
+        }
+      : conversationIdOrOpts;
+
+  const targetAstronautId = opts.astronautId || 'ASTRO-74-SJ';
+  const astroProfile = getProfile(targetAstronautId);
+  const isSurgeonSender =
+    opts.sender === 'astronaut'
+      ? false
+      : opts.sender === 'surgeon'
+      ? true
+      : opts.isSurgeon ?? true;
+
   const newMsg: MedicalMessage = {
-    id: `msg-${Date.now()}`,
-    conversationId,
-    senderId: 'user-fs-vance',
-    senderName: 'Dr. Marcus Vance, M.D. (You)',
-    senderRole: 'Lead Flight Surgeon',
-    content: content.trim(),
+    id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    conversationId: opts.conversationId,
+    senderId: opts.senderId || (isSurgeonSender ? 'user-fs-vance' : astroProfile.id),
+    senderName:
+      opts.senderName ||
+      (isSurgeonSender ? 'Dr. Marcus Vance, M.D.' : astroProfile.name),
+    senderRole:
+      opts.senderRole ||
+      (isSurgeonSender ? 'Lead Flight Surgeon' : astroProfile.callsign),
+    content: opts.content.trim(),
     timestamp: new Date().toISOString(),
-    isSurgeon: true,
-    messageType,
-    priority,
+    isSurgeon: isSurgeonSender,
+    messageType: opts.messageType || (isSurgeonSender ? 'clinical_directive' : 'routine'),
+    priority: opts.priority || (opts.isEmergency ? 'urgent' : 'normal'),
+    isEmergency: opts.isEmergency,
+    hasTelemetry: opts.hasTelemetry,
+    telemetryData: opts.telemetryData,
   };
 
-  if (!currentMessages[conversationId]) {
-    currentMessages[conversationId] = [];
+  if (!currentMessages[opts.conversationId]) {
+    currentMessages[opts.conversationId] = [];
   }
-  currentMessages[conversationId].push(newMsg);
+  currentMessages[opts.conversationId].push(newMsg);
 
-  // Update conversation last message
-  const conv = currentConversations.find((c) => c.id === conversationId);
+  // Update conversation metadata
+  const conv = currentConversations.find((c) => c.id === opts.conversationId);
   if (conv) {
     conv.lastMessage = newMsg.content;
     conv.lastTimestamp = newMsg.timestamp;
+    if (!isSurgeonSender) {
+      conv.unreadCount = (conv.unreadCount || 0) + 1;
+    } else {
+      conv.unreadCount = 0;
+    }
   }
 
-  // Sync direct Flight Surgeon replies in Communications with Doctor Chat & reset wait timer
-  if (conversationId === 'conv-astro-salma' && messageType !== 'telemetry_alert') {
-    recordSurgeonReplyToDoctorChat('ASTRO-74-SJ', newMsg.content, 'Dr. Marcus Vance, M.D. (Flight Surgeon)', true);
+  // Mirror across Doctor Chat channel cleanly without loops
+  if (opts.conversationId === 'conv-astro-salma' && newMsg.messageType !== 'telemetry_alert') {
+    if (isSurgeonSender) {
+      recordSurgeonReplyToDoctorChat(targetAstronautId, newMsg.content, newMsg.senderName, true);
+    } else {
+      addChannelMessage(targetAstronautId, 'doctor', {
+        sender: 'astronaut',
+        senderId: astroProfile.id,
+        senderName: `${astroProfile.name} (${astroProfile.callsign})`,
+        senderRole: astroProfile.role,
+        content: newMsg.content,
+      });
+    }
   }
 
   return newMsg;
@@ -1883,46 +2323,44 @@ export const setDoctorAvailabilityConfig = (params: {
 
 export const getMedicalAssistantContext = (astronautId = 'ASTRO-74-SJ'): MedicalAssistantContext => {
   ensureChannelHistories(astronautId);
+  const crewProfile = getProfile(astronautId);
+  const crewVitals = getVitals(astronautId);
   const crewMember = currentCrewMembers.find((c) => c.id === astronautId);
-  const isPrimary = !crewMember || crewMember.id === currentAstronautProfile.id;
+  const isPrimary = astronautId === 'ASTRO-74-SJ';
 
-  const restingBaseline: number | null = isPrimary ? currentAstronautProfile.restingHeartRate : null;
-
-  const hr = isPrimary ? currentVitals.heartRate : (crewMember?.heartRate || currentVitals.heartRate);
-  const [bpSysRaw, bpDiaRaw] = isPrimary
-    ? [currentVitals.bloodPressureSys, currentVitals.bloodPressureDia]
-    : (crewMember?.bloodPressure || '118/76').split('/').map((n) => Number(n));
-  const bpSys = bpSysRaw || 118;
-  const bpDia = bpDiaRaw || 76;
-  const spo2 = isPrimary ? currentVitals.spO2 : (crewMember?.spO2 || currentVitals.spO2);
-  const temp = isPrimary ? currentVitals.temperature : (crewMember?.temperature || currentVitals.temperature);
-  const rr: number | null = isPrimary ? currentVitals.respiratoryRate : null;
-  const sleepHours: number | null = isPrimary ? currentVitals.sleepHours : null;
-  const timestamp: string | null = isPrimary ? currentVitals.timestamp : null;
-  const lastMeasurementLabel = isPrimary
-    ? new Date(currentVitals.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : (crewMember?.lastMeasurementTime || 'Unavailable');
+  const restingBaseline: number | null = crewProfile.restingHeartRate;
+  const hr = crewVitals.heartRate;
+  const bpSys = crewVitals.bloodPressureSys;
+  const bpDia = crewVitals.bloodPressureDia;
+  const spo2 = crewVitals.spO2;
+  const temp = crewVitals.temperature;
+  const rr: number | null = crewVitals.respiratoryRate;
+  const sleepHours: number | null = crewVitals.sleepHours;
+  const timestamp: string | null = crewVitals.timestamp;
+  const lastMeasurementLabel = new Date(crewVitals.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const vitalEvaluations = evaluateVitalSigns(hr, bpSys, bpDia, spo2, temp, rr, restingBaseline);
 
-  const activeSymptoms: SymptomReport[] = isPrimary
-    ? currentSymptoms.filter((s) => s.status !== 'resolved')
-    : crewMember?.latestSymptom && crewMember.latestSymptom !== 'None reported'
-    ? [
-        {
-          id: `SYM-${crewMember.id}`,
-          bodyPart: crewMember.latestSymptom,
-          painType: 'Dull',
-          intensity: 0,
-          notes: `Logged in crew summary (${crewMember.lastMeasurementTime}); numerical severity score not recorded.`,
-          timestamp: new Date().toISOString(),
-          status: 'monitoring',
-        },
-      ]
-    : [];
+  const astroSymptoms = getSymptoms(astronautId);
+  const activeSymptoms: SymptomReport[] =
+    astroSymptoms.filter((s) => s.status !== 'resolved').length > 0
+      ? astroSymptoms.filter((s) => s.status !== 'resolved')
+      : crewMember?.latestSymptom && crewMember.latestSymptom !== 'None Reported' && !isPrimary
+      ? [
+          {
+            id: `SYM-${crewMember.id}`,
+            bodyPart: crewMember.latestSymptom,
+            painType: 'Dull',
+            intensity: 0,
+            notes: `Logged in crew summary (${crewMember.lastMeasurementTime}); numerical severity score not recorded.`,
+            timestamp: new Date().toISOString(),
+            status: 'monitoring',
+          },
+        ]
+      : [];
 
   const activeRestrictions = currentMedicalRestrictions.filter(
-    (r) => r.astronautId === (crewMember?.id || currentAstronautProfile.id) && r.status === 'Active'
+    (r) => r.astronautId === crewProfile.id && r.status === 'Active'
   );
 
   const activeChannel = getActiveChannelForAstronaut(astronautId);
@@ -2475,6 +2913,350 @@ export const postAstronautDirectToSurgeon = (astronautId: string, content: strin
 
   return msg;
 };
+
+// ─── Bio-Metric Ping Workflow (Astronaut -> Flight Surgeon Alert & Telemetry) ─
+
+export const createBiometricPing = (params: {
+  astronautId?: string;
+  source?: 'ping' | 'emergency' | 'digital_twin' | 'triage' | 'system';
+  severity?: 'critical' | 'warning' | 'info';
+  title?: string;
+  message?: string;
+  recommendedAction?: string;
+  isEmergency?: boolean;
+  telemetry?: {
+    heartRate?: number;
+    bloodPressure?: string;
+    spO2?: number;
+    temperature?: number;
+    spineElongation?: number;
+    sleepHours?: number;
+    radiationDoseMsv?: number;
+    riskLevel?: string;
+    actionName?: string;
+  };
+}) => {
+  const astronautId = params.astronautId || 'ASTRO-74-SJ';
+  const profile = getProfile(astronautId);
+  const vitals = getVitals(astronautId);
+  const now = new Date().toISOString();
+
+  const hr = params.telemetry?.heartRate ?? vitals.heartRate;
+  const bp = params.telemetry?.bloodPressure ?? `${vitals.bloodPressureSys}/${vitals.bloodPressureDia}`;
+  const spo2 = params.telemetry?.spO2 ?? vitals.spO2;
+  const temp = params.telemetry?.temperature ?? vitals.temperature;
+  const spine = params.telemetry?.spineElongation ?? profile.spineElongation;
+  const sleep = params.telemetry?.sleepHours ?? vitals.sleepHours;
+  const radiation = params.telemetry?.radiationDoseMsv ?? profile.radiationDoseMsv;
+
+  const isEmergency = Boolean(params.isEmergency || params.source === 'emergency' || params.severity === 'critical');
+  const sourceLabel =
+    params.source === 'digital_twin'
+      ? 'Digital Twin Risk Simulation'
+      : isEmergency
+      ? 'Emergency Bio-Ping Beacon'
+      : 'Encrypted Bio-Metric Ping';
+
+  const alertTitle =
+    params.title ||
+    (isEmergency
+      ? `EMERGENCY BIO-PING: ${profile.name} (${profile.callsign})`
+      : `Bio-Metric Telemetry Ping: ${profile.name} (${profile.callsign})`);
+
+  const alertDescription =
+    params.message ||
+    `${sourceLabel} transmitted by ${profile.name}. Live Telemetry — HR: ${hr} bpm | BP: ${bp} mmHg | SpO2: ${spo2}% | Temp: ${temp}°C | Spine Delta: +${spine} cm | Sleep: ${sleep}h | Rad: ${radiation} mSv.`;
+
+  const newAlert: MedicalAlert = {
+    id: `ALT-PING-${Date.now()}`,
+    astronautId: profile.id,
+    astronautName: profile.name,
+    astronautCallsign: profile.callsign,
+    photoUrl: profile.photoUrl,
+    title: alertTitle,
+    description: alertDescription,
+    severity: params.severity || (isEmergency ? 'critical' : 'warning'),
+    category: params.source === 'digital_twin' ? 'Spinal Adaptation' : 'Biometrics',
+    timestamp: now,
+    isAcknowledged: false,
+    recommendedAction:
+      params.recommendedAction ||
+      (isEmergency
+        ? 'Immediate Flight Surgeon acknowledgement required. Open direct uplink and inspect live vital telemetry.'
+        : 'Review attached telemetry snapshot and respond to astronaut via MedCom Direct.'),
+    source: params.source || 'ping',
+    telemetrySnapshot: {
+      heartRate: hr,
+      bloodPressure: bp,
+      spO2: spo2,
+      temperature: temp,
+      spineElongation: spine,
+      sleepHours: sleep,
+      radiationDoseMsv: radiation,
+      riskLevel: params.telemetry?.riskLevel,
+      actionName: params.telemetry?.actionName,
+    },
+  };
+
+  currentMedicalAlerts = [newAlert, ...currentMedicalAlerts];
+
+  // Update crew member summary measurement time
+  const crewMember = currentCrewMembers.find((c) => c.id === profile.id);
+  if (crewMember) {
+    crewMember.lastMeasurementTime = isEmergency ? 'Just now (BIO-PING CRITICAL)' : 'Just now (BIO-PING)';
+    if (isEmergency) {
+      crewMember.healthStatus = 'critical';
+    }
+  }
+
+  // Post telemetry ping message into shared Surgeon–Astronaut conversation
+  const pingMsg = sendMedicalMessage({
+    conversationId: 'conv-astro-salma',
+    content: isEmergency
+      ? `🚨 EMERGENCY BIO-PING TRANSMITTED // HR: ${hr} bpm | BP: ${bp} mmHg | SpO2: ${spo2}% | Spine: +${spine} cm | Rad: ${radiation} mSv`
+      : `📡 BIO-METRIC TELEMETRY PING (${sourceLabel}) // HR: ${hr} bpm | BP: ${bp} mmHg | SpO2: ${spo2}% | Spine: +${spine} cm`,
+    senderId: profile.id,
+    senderName: profile.name,
+    senderRole: profile.callsign,
+    isSurgeon: false,
+    sender: 'astronaut',
+    astronautId: profile.id,
+    messageType: 'telemetry_alert',
+    priority: isEmergency ? 'urgent' : 'priority',
+    isEmergency,
+    hasTelemetry: true,
+    telemetryData: {
+      hr,
+      bp,
+      spO2: spo2,
+      spineDelta: spine,
+    },
+  });
+
+  if (isEmergency) {
+    sendMedicalMessage({
+      conversationId: 'conv-med-team',
+      content: `🚨 EMERGENCY BIO-PING from ${profile.name} (${profile.callsign}): HR ${hr} bpm, BP ${bp} mmHg, SpO2 ${spo2}%, Spine +${spine} cm. Flight Surgeon acknowledgement pending.`,
+      senderId: 'astra-ping-relay',
+      senderName: 'ASTROCARE Emergency Beacon',
+      senderRole: 'Automated Bio-Telemetry Relay',
+      isSurgeon: false,
+      sender: 'astronaut',
+      astronautId: profile.id,
+      messageType: 'telemetry_alert',
+      priority: 'urgent',
+      isEmergency: true,
+      hasTelemetry: true,
+      telemetryData: { hr, bp, spO2: spo2, spineDelta: spine },
+    });
+  }
+
+  // Log timeline event
+  const timelineEvent = addTimelineEvent({
+    type: 'ping',
+    title: alertTitle,
+    summary: alertDescription,
+    severity: isEmergency ? 'alert' : 'warning',
+    badge: isEmergency ? 'EMERGENCY PING' : 'BIO-PING',
+    details: {
+      astronautId: profile.id,
+      alertId: newAlert.id,
+      telemetry: newAlert.telemetrySnapshot,
+    },
+  }, profile.id);
+
+  // Also record into Exchanged Medical Reports so Surgeon Reports tab reflects incoming ping dossiers
+  const report = createExchangedReport({
+    title: alertTitle,
+    documentType: params.source === 'digital_twin' ? 'Spine Ultrasonic Analysis' : 'Microgravity Adaptation Audit',
+    astronautId: profile.id,
+    astronautName: profile.name,
+    astronautCallsign: profile.callsign,
+    authorId: profile.id,
+    authorName: profile.name,
+    authorRole: profile.role,
+    recipientDoctorId: 'user-fs-vance',
+    recipientDoctorName: profile.assignedSurgeon.name,
+    recipientDoctorRole: 'Lead Flight Surgeon (MCC Houston / JSC)',
+    urgency: isEmergency ? 'critical_stat' : 'urgent',
+    status: 'transmitted',
+    clinicalSummary: alertDescription,
+    findings: [
+      `Heart Rate: ${hr} bpm (Baseline: ${profile.restingHeartRate} bpm)`,
+      `Blood Pressure: ${bp} mmHg · SpO2: ${spo2}% · Temp: ${temp}°C`,
+      `Microgravity Spine Elongation: +${spine} cm`,
+      ...(params.telemetry?.actionName ? [`Simulated Action: ${params.telemetry.actionName} (${params.telemetry.riskLevel || 'REVIEW'})`] : []),
+    ],
+    referralQuestion: 'Incoming automated bio-metric ping from astronaut console awaiting Flight Surgeon telemetry review.',
+    vitalsSnapshot: {
+      hr,
+      bp,
+      spo2,
+      temp,
+      spineDelta: `+${spine} cm`,
+    },
+  });
+
+  return { alert: newAlert, message: pingMsg, timelineEvent, report };
+};
+
+// ─── Surgeon Orders & Exercise Clearance Engine ─────────────────────────────
+
+export const createSurgeonOrder = (input: {
+  astronautId?: string;
+  type: SurgeonOrderType;
+  title?: string;
+  notes?: string;
+  exerciseId?: string;
+  exerciseName?: string;
+  restrictionId?: string;
+  issuedBy?: string;
+  credentialId?: string;
+}) => {
+  const astronautId = input.astronautId || 'ASTRO-74-SJ';
+  const profile = getProfile(astronautId);
+  const issuedBy = input.issuedBy || 'Dr. Marcus Vance, M.D., FACEP';
+  const credentialId = input.credentialId || 'NASA-FS-9842';
+  const clearedSet = getClearedSet(astronautId);
+
+  const matchedExercise = input.exerciseId
+    ? spaceExercises.find((e) => e.id === input.exerciseId)
+    : input.exerciseName
+    ? spaceExercises.find((e) => e.name.toLowerCase() === input.exerciseName?.toLowerCase())
+    : undefined;
+
+  const resolvedExerciseId = matchedExercise?.id || input.exerciseId;
+  const resolvedExerciseName = matchedExercise?.name || input.exerciseName;
+
+  if (input.type === 'approve_exercise' && resolvedExerciseId) {
+    // Supersede any older order for the same exercise
+    currentSurgeonOrders.forEach((o) => {
+      if (o.astronautId === astronautId && o.exerciseId === resolvedExerciseId && o.status === 'Active') {
+        o.status = 'Completed';
+      }
+    });
+    clearedSet.add(resolvedExerciseId);
+    if (resolvedExerciseName) clearedSet.add(resolvedExerciseName.toLowerCase());
+  } else if (input.type === 'revoke_exercise' && resolvedExerciseId) {
+    currentSurgeonOrders.forEach((o) => {
+      if (o.astronautId === astronautId && o.exerciseId === resolvedExerciseId && o.status === 'Active') {
+        o.status = 'Revoked';
+      }
+    });
+    clearedSet.delete(resolvedExerciseId);
+    if (resolvedExerciseName) clearedSet.delete(resolvedExerciseName.toLowerCase());
+  } else if (input.type === 'lift_restriction' && input.restrictionId) {
+    updateRestriction(input.restrictionId, { status: 'Lifted' });
+  }
+
+  const order: SurgeonOrder = {
+    id: `ORD-${Date.now()}`,
+    astronautId,
+    astronautName: profile.name,
+    type: input.type,
+    title:
+      input.title ||
+      (input.type === 'approve_exercise'
+        ? `Exercise Clearance Approved: ${resolvedExerciseName || resolvedExerciseId}`
+        : input.type === 'revoke_exercise'
+        ? `Exercise Clearance Revoked: ${resolvedExerciseName || resolvedExerciseId}`
+        : input.type === 'lift_restriction'
+        ? `Restriction Lifted: ${input.restrictionId}`
+        : 'Flight Surgeon Clinical Order'),
+    notes:
+      input.notes ||
+      (input.type === 'approve_exercise'
+        ? `Flight Surgeon authorized protocol clearance for ${resolvedExerciseName || resolvedExerciseId}.`
+        : 'Issued via Flight Surgeon Console.'),
+    exerciseId: resolvedExerciseId,
+    exerciseName: resolvedExerciseName,
+    restrictionId: input.restrictionId,
+    issuedBy,
+    credentialId,
+    status: input.type === 'revoke_exercise' ? 'Revoked' : 'Active',
+    timestamp: new Date().toISOString(),
+  };
+
+  currentSurgeonOrders = [order, ...currentSurgeonOrders];
+
+  addTimelineEvent({
+    type: 'surgeon_order',
+    title: order.title,
+    summary: `${order.issuedBy} · ${order.notes}`,
+    severity: input.type === 'revoke_exercise' ? 'warning' : 'nominal',
+    badge: 'SURGEON ORDER',
+    details: { ...order },
+  }, astronautId);
+
+  // Notify astronaut directly on MedCom channel when exercise is approved/lifted
+  if (input.type === 'approve_exercise' || input.type === 'lift_restriction') {
+    sendMedicalMessage({
+      conversationId: 'conv-astro-salma',
+      content: `✅ MEDICAL ORDER (${order.id}): ${order.title}. ${order.notes}`,
+      senderId: 'user-fs-vance',
+      senderName: 'Dr. Marcus Vance, M.D.',
+      senderRole: 'Lead Flight Surgeon',
+      isSurgeon: true,
+      sender: 'surgeon',
+      astronautId,
+      messageType: 'clearance',
+      priority: 'priority',
+    });
+  }
+
+  const evaluation = evaluateExercisesForAstronaut(astronautId);
+  return { order, ...evaluation };
+};
+
+export const updateSurgeonOrder = (
+  id: string,
+  updates: Partial<SurgeonOrder>
+): SurgeonOrder | null => {
+  const idx = currentSurgeonOrders.findIndex((o) => o.id === id);
+  if (idx === -1) return null;
+  const order = { ...currentSurgeonOrders[idx], ...updates };
+  currentSurgeonOrders[idx] = order;
+
+  if (updates.status === 'Revoked' && order.exerciseId) {
+    const clearedSet = getClearedSet(order.astronautId);
+    clearedSet.delete(order.exerciseId);
+    if (order.exerciseName) clearedSet.delete(order.exerciseName.toLowerCase());
+  }
+  return order;
+};
+
+// ─── Full Surgeon Crew Dossier Lookup ───────────────────────────────────────
+
+export const getSurgeonCrewDossier = (astronautId: string) => {
+  const crewList = getCrewMembers();
+  const member = crewList.find((c) => c.id === astronautId) || crewList[0];
+  const targetId = member?.id || astronautId;
+  const profile = getProfile(targetId);
+  const vitals = getVitals(targetId);
+  const symptoms = getSymptoms(targetId);
+  const restrictions = getRestrictions(targetId);
+  const notes = getDoctorNotes(targetId);
+  const timeline = getTimelineEvents(targetId);
+  const fitness = evaluateExercisesForAstronaut(targetId);
+  const orders = getSurgeonOrders(targetId);
+  const alerts = currentMedicalAlerts.filter((a) => a.astronautId === targetId);
+
+  return {
+    member,
+    profile,
+    vitals,
+    symptoms,
+    restrictions,
+    notes,
+    timeline,
+    exercises: fitness.exercises,
+    restrictedExercises: fitness.restricted,
+    approvedExerciseIds: fitness.approvedExerciseIds,
+    orders,
+    alerts,
+  };
+};
+
 
 
 

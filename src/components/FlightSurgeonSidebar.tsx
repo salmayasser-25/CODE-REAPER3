@@ -100,7 +100,7 @@ export const FlightSurgeonSidebar: React.FC<FlightSurgeonSidebarProps> = ({
   ];
 
   return (
-    <aside className="w-64 lg:w-72 shrink-0 border-r border-[#00E5FF]/25 bg-[#050810]/75 backdrop-blur-xl flex flex-col justify-between hidden md:flex min-h-[calc(100vh-4.5rem-28px)]">
+    <aside className="w-64 lg:w-72 shrink-0 sticky top-0 h-full max-h-screen overflow-y-auto border-r border-[#00E5FF]/25 bg-[#050810]/75 backdrop-blur-xl flex-col justify-between hidden md:flex">
       {/* Top Nav List */}
       <div className="p-4 space-y-5">
         <div>
@@ -194,7 +194,7 @@ export const FlightSurgeonSidebar: React.FC<FlightSurgeonSidebarProps> = ({
       </div>
 
       {/* Flight Surgeon Console Identity Card */}
-      <div className="p-3.5 border-t border-slate-800 bg-[#070d1e]">
+      <div className="sticky bottom-0 p-3.5 border-t border-slate-800 bg-[#070d1e]/95 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-10 h-10 rounded-xl border border-[#00E5FF]/50 bg-[#00E5FF]/15 flex items-center justify-center font-black text-[#00E5FF] text-sm font-['Chakra_Petch',sans-serif] shadow-[0_0_15px_rgba(0,229,255,0.25)]">

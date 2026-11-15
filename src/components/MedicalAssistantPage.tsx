@@ -155,7 +155,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
 
   // Smooth scroll on new messages or channel switch
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [context?.history?.length, context?.activeChannel, isTypingAI]);
 
   // Live countdown ticker synced strictly from server timerState.expiresAt
@@ -963,7 +963,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
             )}
 
             {/* Active Channel Message History */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
               {context?.history?.map((msg: MedicalAssistantMessage) => {
                 if (msg.sender === 'system') {
                   return (
@@ -1179,7 +1179,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
             </div>
 
             {/* Astronaut Message Composer (Routes strictly to ACTIVE channel only) */}
-            <div className="p-4 border-t border-slate-800 bg-[#091129]/95 space-y-2.5">
+            <div className="sticky bottom-0 z-10 p-4 border-t border-slate-800 bg-[#091129]/90 backdrop-blur-xl space-y-2.5 shrink-0">
               <form
                 onSubmit={(e) => {
                   e.preventDefault();

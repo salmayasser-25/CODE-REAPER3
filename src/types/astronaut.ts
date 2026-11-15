@@ -133,6 +133,8 @@ export interface SpaceExercise {
   status: ExerciseStatus;
   warningMessage?: string; // shown when restricted
   restrictionReason?: string; // reason why restricted
+  surgeonApproved?: boolean;
+  approvalOrderId?: string;
 }
 
 export interface FitnessAIAnalysis {
@@ -161,7 +163,7 @@ export interface WorkoutSessionLog {
   completedAt: string;
 }
 
-export type TimelineEventType = 'vitals' | 'symptom' | 'ai_insight' | 'checkin' | 'exercise_eva' | 'restriction' | 'doctor_note';
+export type TimelineEventType = 'vitals' | 'symptom' | 'ai_insight' | 'checkin' | 'exercise_eva' | 'restriction' | 'doctor_note' | 'ping' | 'surgeon_order';
 
 export interface TimelineEvent {
   id: string;
@@ -226,6 +228,14 @@ export interface MedicalMessage {
   isSurgeon: boolean;
   messageType?: 'clinical_directive' | 'telemetry_alert' | 'routine' | 'clearance';
   priority?: 'normal' | 'urgent' | 'priority';
+  isEmergency?: boolean;
+  hasTelemetry?: boolean;
+  telemetryData?: {
+    hr: number;
+    bp: string;
+    spO2: number;
+    spineDelta: number;
+  };
 }
 
 export interface MedicalConversation {
@@ -276,6 +286,18 @@ export interface MedicalAlert {
   isAcknowledged: boolean;
   reviewedBy?: string;
   recommendedAction: string;
+  source?: 'ping' | 'emergency' | 'triage' | 'digital_twin' | 'system';
+  telemetrySnapshot?: {
+    heartRate?: number;
+    bloodPressure?: string;
+    spO2?: number;
+    temperature?: number;
+    spineElongation?: number;
+    sleepHours?: number;
+    radiationDoseMsv?: number;
+    riskLevel?: string;
+    actionName?: string;
+  };
 }
 
 export interface ReportReviewResponse {
@@ -442,5 +464,196 @@ export interface MedicalAssistantContext {
   aiHistoryCount: number;
   doctorHistoryCount: number;
 }
+
+export type SurgeonOrderType =
+  | 'approve_exercise'
+  | 'revoke_exercise'
+  | 'lift_restriction'
+  | 'prescribe_restriction'
+  | 'clinical_order';
+
+export interface SurgeonOrder {
+  id: string;
+  astronautId: string;
+  astronautName: string;
+  type: SurgeonOrderType;
+  title: string;
+  notes: string;
+  exerciseId?: string;
+  exerciseName?: string;
+  restrictionId?: string;
+  issuedBy: string;
+  credentialId: string;
+  status: 'Active' | 'Completed' | 'Revoked';
+  timestamp: string;
+}
+
+// ─── Backend API Zod Validation Schemas ─────────────────────────────────────
+
+export const LogVitalsSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  heartRate: z.coerce.number().min(25).max(240),
+  bloodPressureSys: z.coerce.number().min(50).max(260),
+  bloodPressureDia: z.coerce.number().min(30).max(160),
+  spO2: z.coerce.number().min(50).max(100),
+  temperature: z.coerce.number().min(30).max(45),
+  sleepHours: z.coerce.number().min(0).max(24),
+  weightKg: z.coerce.number().min(30).max(220).optional(),
+  respiratoryRate: z.coerce.number().min(4).max(60).optional(),
+  hrvMs: z.coerce.number().min(5).max(300).optional(),
+});
+
+export const UpdateVitalsSchema = LogVitalsSchema.partial();
+
+export const CreateCheckInSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  missionDay: z.coerce.number().int().min(1).max(2000).optional(),
+  mood: z.enum(['Nominal / Focused', 'Mild Fatigue', 'High Stress', 'Homesick', 'Optimistic']),
+  energyLevel: z.coerce.number().min(1).max(10),
+  sleepQuality: z.enum(['Deep & Restorative', 'Fragmented', 'Restless / MicroG Noise', 'Insomnia']),
+  sleepHours: z.coerce.number().min(0).max(24).optional(),
+  hydrationLiters: z.coerce.number().min(0).max(15).optional(),
+  spaceAdaptationSymptoms: z.array(z.string()).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+export const CreateSymptomSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  bodyPart: z.string().min(1, 'bodyPart is required'),
+  meshId: z.string().optional(),
+  painType: z.enum(['Sharp', 'Dull', 'Burning']).optional(),
+  intensity: z.coerce.number().min(0).max(10).optional(),
+  notes: z.string().max(2000).optional(),
+  status: z.enum(['active', 'monitoring', 'resolved']).optional(),
+});
+
+export const UpdateSymptomSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  status: z.enum(['active', 'monitoring', 'resolved']),
+  notes: z.string().max(2000).optional(),
+});
+
+export const CreateRestrictionSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  astronautName: z.string().optional(),
+  name: z.string().min(2, 'Restriction name is required'),
+  description: z.string().min(2, 'Description is required'),
+  affectedRegion: z.string().min(2, 'affectedRegion is required'),
+  restrictedExercises: z.array(z.string()).optional(),
+  severity: z.enum(['High', 'Moderate', 'Low']).optional(),
+  effectiveDate: z.string().optional(),
+  status: z.enum(['Active', 'Under Review', 'Lifted']).optional(),
+  prescribedBy: z.string().optional(),
+  clinicalRationale: z.string().optional(),
+});
+
+export const UpdateRestrictionSchema = z.object({
+  status: z.enum(['Active', 'Under Review', 'Lifted']).optional(),
+  severity: z.enum(['High', 'Moderate', 'Low']).optional(),
+  description: z.string().optional(),
+  clinicalRationale: z.string().optional(),
+  restrictedExercises: z.array(z.string()).optional(),
+});
+
+export const CreateDoctorNoteSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  astronautName: z.string().optional(),
+  author: z.string().optional(),
+  category: z.enum([
+    'Routine Assessment',
+    'Adaptation Review',
+    'Countermeasure Directive',
+    'Pre-EVA Medical Clearance',
+    'Clinical Anomaly',
+  ]).optional(),
+  title: z.string().min(2, 'Title is required'),
+  content: z.string().min(2, 'Content is required'),
+  relatedSymptoms: z.array(z.string()).optional(),
+  vitalsSnapshot: z.object({
+    hr: z.number(),
+    bp: z.string(),
+    spo2: z.number(),
+    temp: z.number(),
+  }).optional(),
+  status: z.enum(['Finalized', 'Addendum Added', 'Draft']).optional(),
+});
+
+export const SendMessageSchema = z.object({
+  conversationId: z.string().min(1, 'conversationId is required'),
+  content: z.string().trim().min(1, 'Message content cannot be empty'),
+  messageType: z.enum(['clinical_directive', 'telemetry_alert', 'routine', 'clearance']).optional(),
+  priority: z.enum(['normal', 'urgent', 'priority']).optional(),
+  senderId: z.string().optional(),
+  senderName: z.string().optional(),
+  senderRole: z.string().optional(),
+  isSurgeon: z.boolean().optional(),
+  sender: z.enum(['astronaut', 'surgeon']).optional(),
+  astronautId: z.string().optional(),
+  isEmergency: z.boolean().optional(),
+  hasTelemetry: z.boolean().optional(),
+  telemetryData: z.object({
+    hr: z.number(),
+    bp: z.string(),
+    spO2: z.number(),
+    spineDelta: z.number(),
+  }).optional(),
+});
+
+export const CreatePingSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  source: z.enum(['ping', 'emergency', 'digital_twin', 'triage', 'system']).optional(),
+  severity: z.enum(['critical', 'warning', 'info']).optional(),
+  title: z.string().optional(),
+  message: z.string().optional(),
+  recommendedAction: z.string().optional(),
+  isEmergency: z.boolean().optional(),
+  telemetry: z.object({
+    heartRate: z.number().optional(),
+    bloodPressure: z.string().optional(),
+    spO2: z.number().optional(),
+    temperature: z.number().optional(),
+    spineElongation: z.number().optional(),
+    sleepHours: z.number().optional(),
+    radiationDoseMsv: z.number().optional(),
+    riskLevel: z.string().optional(),
+    actionName: z.string().optional(),
+  }).optional(),
+});
+
+export const CreateSurgeonOrderSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  type: z.enum(['approve_exercise', 'revoke_exercise', 'lift_restriction', 'prescribe_restriction', 'clinical_order']),
+  title: z.string().optional(),
+  notes: z.string().optional(),
+  exerciseId: z.string().optional(),
+  exerciseName: z.string().optional(),
+  restrictionId: z.string().optional(),
+  issuedBy: z.string().optional(),
+  credentialId: z.string().optional(),
+});
+
+export const SimulatorRunSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  actionId: z.string().optional(),
+  weightKg: z.coerce.number().min(0).max(500).optional(),
+  pressurePsi: z.coerce.number().min(0).max(30).optional(),
+  treadmillSpeedKmh: z.coerce.number().min(0).max(35).optional(),
+  profile: z.any().optional(),
+});
+
+export const LogWorkoutSessionSchema = z.object({
+  astronautId: z.string().min(1).optional(),
+  exerciseId: z.string().min(1, 'exerciseId is required'),
+  exerciseName: z.string().min(1, 'exerciseName is required'),
+  category: z.enum(['Upper Body', 'Lower Body', 'Core', 'Full Body']).optional(),
+  equipment: z.string().optional(),
+  durationMinutes: z.coerce.number().min(1).max(480).optional(),
+  actualDurationSeconds: z.coerce.number().min(1).max(36000).optional(),
+  caloriesBurned: z.coerce.number().min(0).max(5000).optional(),
+  avgHeartRate: z.coerce.number().min(30).max(240).optional(),
+  peakHeartRate: z.coerce.number().min(30).max(240).optional(),
+  notes: z.string().max(1000).optional(),
+});
+
 
 

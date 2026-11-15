@@ -16,10 +16,8 @@ import { CommsHubPage } from './components/CommsHubPage.tsx';
 import { MedicalReportsPage } from './components/MedicalReportsPage.tsx';
 import { MissionEnvironmentPage } from './components/MissionEnvironmentPage.tsx';
 import { DigitalTwinPage } from './components/DigitalTwinPage.tsx';
-import { DashboardOverviewPage } from './components/DashboardOverviewPage.tsx';
-import { IndividualAstronautProfile } from './components/IndividualAstronautProfile.tsx';
-import { MedicalAssistantPage } from './components/MedicalAssistantPage.tsx';
-import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
+import { SurgeonDashboard } from './pages/SurgeonDashboard.tsx';
+import { AuthProvider, useAuth, UserRole } from './contexts/AuthContext.tsx';
 import {
   AstronautProfile,
   FlightSurgeon,
@@ -90,26 +88,60 @@ const TAB_TO_ROUTE: Record<string, string> = {
   assistant: '/medical-assistant',
 };
 
-function RequireAuth({ children }: { children: React.ReactElement }) {
-  const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) {
-    return null;
+function AuthLoadingScreen() {
+  return (
+    <div className="min-h-screen bg-[#050810] flex flex-col items-center justify-center gap-3 text-slate-200 font-mono text-xs">
+      <div className="w-8 h-8 border-2 border-[#00E5FF]/30 border-t-[#00E5FF] rounded-full animate-spin" />
+      <span className="tracking-widest uppercase text-[#00E5FF]">VERIFYING SESSION...</span>
+    </div>
+  );
+}
+
+function RequireAuth({
+  children,
+  requiredRole,
+}: {
+  children: React.ReactElement;
+  requiredRole?: UserRole;
+}) {
+  const { isAuthenticated, isLoading, isRoleLoading, role } = useAuth();
+  if (isLoading || isRoleLoading) {
+    return <AuthLoadingScreen />;
   }
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !role) {
     return <Navigate to="/login" replace />;
+  }
+  if (requiredRole && role !== requiredRole) {
+    return (
+      <Navigate
+        to={role === 'surgeon' ? '/surgeon/overview' : '/astronaut/profile'}
+        replace
+      />
+    );
   }
   return children;
 }
 
 function LoginRoute() {
-  const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) {
-    return null;
+  const { isAuthenticated, isLoading, isRoleLoading, role } = useAuth();
+  if (isLoading || (isAuthenticated && isRoleLoading)) {
+    return <AuthLoadingScreen />;
   }
-  if (isAuthenticated) {
-    return <Navigate to="/profile" replace />;
+  if (isAuthenticated && role) {
+    return <Navigate to={role === 'surgeon' ? '/surgeon/overview' : '/astronaut/profile'} replace />;
   }
   return <LoginScreen />;
+}
+
+function RoleHomeRedirect() {
+  const { isAuthenticated, isLoading, isRoleLoading, role } = useAuth();
+  if (isLoading || isRoleLoading) {
+    return <AuthLoadingScreen />;
+  }
+  if (!isAuthenticated || !role) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Navigate to={role === 'surgeon' ? '/surgeon/overview' : '/astronaut/profile'} replace />;
 }
 
 function AppRoutes() {
@@ -393,6 +425,7 @@ function AppRoutes() {
       />
 
       <SurgeonLinkCard
+        astronautId={profile.id}
         surgeon={profile.assignedSurgeon}
         isEditing={isEditingInline}
         onSurgeonChange={handleSurgeonChange}
@@ -405,10 +438,62 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginRoute />} />
+      <Route path="/" element={<RoleHomeRedirect />} />
 
+      {/* Flight Surgeon Console Routes (/surgeon/*) */}
+      <Route
+        path="/surgeon"
+        element={
+          <RequireAuth requiredRole="surgeon">
+            <Navigate to="/surgeon/overview" replace />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/surgeon/profile/:astronautId"
+        element={
+          <RequireAuth requiredRole="surgeon">
+            <SurgeonDashboard defaultTab="profile" />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/surgeon/:tab"
+        element={
+          <RequireAuth requiredRole="surgeon">
+            <SurgeonDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/surgeon-overview"
+        element={
+          <RequireAuth requiredRole="surgeon">
+            <Navigate to="/surgeon/overview" replace />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/surgeon-profile"
+        element={
+          <RequireAuth requiredRole="surgeon">
+            <Navigate to="/surgeon/profile/ASTRO-74-SJ" replace />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/medical-assistant"
+        element={
+          <RequireAuth requiredRole="surgeon">
+            <Navigate to="/surgeon/assistant" replace />
+          </RequireAuth>
+        }
+      />
+
+      {/* Astronaut Console Routes (/astronaut/* + legacy tab aliases) */}
       <Route
         element={
-          <RequireAuth>
+          <RequireAuth requiredRole="astronaut">
             <Layout
               profile={profile}
               isEditingInline={isEditingInline}
@@ -426,14 +511,35 @@ function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Navigate to="/profile" replace />} />
+        <Route path="/astronaut" element={<Navigate to="/astronaut/profile" replace />} />
+        <Route path="/astronaut/profile" element={profilePageContent} />
         <Route path="/profile" element={profilePageContent} />
+
+        <Route
+          path="/astronaut/vitals"
+          element={
+            <VitalSignsPage
+              profile={profile}
+              onNavigateToCheckin={() => navigate('/checkin')}
+            />
+          }
+        />
         <Route
           path="/vitals"
           element={
             <VitalSignsPage
               profile={profile}
               onNavigateToCheckin={() => navigate('/checkin')}
+            />
+          }
+        />
+
+        <Route
+          path="/astronaut/checkin"
+          element={
+            <DailyCheckinPage
+              profile={profile}
+              onNavigateToTimeline={() => navigate('/timeline')}
             />
           }
         />
@@ -446,10 +552,27 @@ function AppRoutes() {
             />
           }
         />
+
+        <Route path="/astronaut/fitness" element={<FitnessPage profile={profile} />} />
         <Route path="/fitness" element={<FitnessPage profile={profile} />} />
+
+        <Route path="/astronaut/mental-wellness" element={<MentalWellnessPage profile={profile} />} />
         <Route path="/mental-wellness" element={<MentalWellnessPage profile={profile} />} />
+
+        <Route path="/astronaut/3d-body" element={<InteractiveBodyPage profile={profile} />} />
         <Route path="/3d-body" element={<InteractiveBodyPage profile={profile} />} />
         <Route path="/symptoms" element={<Navigate to="/3d-body" replace />} />
+
+        <Route
+          path="/astronaut/digital-twin"
+          element={
+            <DigitalTwinPage
+              profile={profile}
+              onSendToast={triggerToast}
+              onNavigateToTab={navigateByTab}
+            />
+          }
+        />
         <Route
           path="/digital-twin"
           element={
@@ -461,6 +584,16 @@ function AppRoutes() {
           }
         />
         <Route path="/twin" element={<Navigate to="/digital-twin" replace />} />
+
+        <Route
+          path="/astronaut/timeline"
+          element={
+            <UnifiedTimelinePage
+              profile={profile}
+              onNavigateToTab={navigateByTab}
+            />
+          }
+        />
         <Route
           path="/timeline"
           element={
@@ -470,10 +603,30 @@ function AppRoutes() {
             />
           }
         />
+
+        <Route
+          path="/astronaut/comms"
+          element={
+            <CommsHubPage
+              profile={profile}
+              onSendToast={triggerToast}
+            />
+          }
+        />
         <Route
           path="/comms"
           element={
             <CommsHubPage
+              profile={profile}
+              onSendToast={triggerToast}
+            />
+          }
+        />
+
+        <Route
+          path="/astronaut/reports"
+          element={
+            <MedicalReportsPage
               profile={profile}
               onSendToast={triggerToast}
             />
@@ -488,6 +641,16 @@ function AppRoutes() {
             />
           }
         />
+
+        <Route
+          path="/astronaut/environment"
+          element={
+            <MissionEnvironmentPage
+              profile={profile}
+              onSendToast={triggerToast}
+            />
+          }
+        />
         <Route
           path="/environment"
           element={
@@ -497,59 +660,9 @@ function AppRoutes() {
             />
           }
         />
-        <Route
-          path="/surgeon-overview"
-          element={
-            <DashboardOverviewPage
-              crew={crew}
-              profile={profile}
-              vitals={vitals}
-              restrictions={restrictions}
-              timeline={timeline}
-              alerts={alerts}
-              onSelectAstronaut={(id) => {
-                setSelectedAstronautId(id);
-                navigate('/surgeon-profile');
-              }}
-              onNavigateTab={navigateByTab}
-            />
-          }
-        />
-        <Route
-          path="/surgeon-profile"
-          element={
-            <IndividualAstronautProfile
-              profile={profile}
-              vitals={vitals}
-              symptoms={symptoms}
-              restrictions={restrictions.filter((r) => r.astronautId === selectedAstronautId)}
-              timeline={timeline}
-              exercises={exercises}
-              notes={notes.filter((n) => n.astronautId === selectedAstronautId)}
-              onBackToCrew={() => navigate('/surgeon-overview')}
-              onOpenRestrictionModal={() => navigate('/fitness')}
-              onOpenNoteModal={() => navigate('/reports')}
-              onNavigateTab={navigateByTab}
-            />
-          }
-        />
-        <Route
-          path="/medical-assistant"
-          element={
-            <MedicalAssistantPage
-              crew={crew}
-              initialAstronautId={selectedAstronautId}
-              onDataSyncNeeded={fetchSurgeonData}
-              onNavigateTab={navigateByTab}
-              onOpenAstronautProfile={(id) => {
-                setSelectedAstronautId(id);
-                navigate('/surgeon-profile');
-              }}
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/profile" replace />} />
       </Route>
+
+      <Route path="*" element={<RoleHomeRedirect />} />
     </Routes>
   );
 }

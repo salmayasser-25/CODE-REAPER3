@@ -220,6 +220,54 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
   const activeChannel = channels.find((c) => c.id === activeChannelId) || channels[0];
   const currentMessages = channelMessages[activeChannelId] || [];
 
+  // Shared backend conversation mapping for Astronaut <-> Flight Surgeon & Medical Team
+  const mapServerMsg = (m: any): Message => ({
+    id: m.id,
+    sender: m.isEmergency && m.messageType === 'telemetry_alert'
+      ? 'system'
+      : m.isSurgeon
+      ? 'surgeon'
+      : m.senderId === profile.id
+      ? 'astronaut'
+      : 'team',
+    senderName: m.senderName,
+    senderRole: m.senderRole,
+    content: m.content,
+    timestamp: m.timestamp
+      ? `${new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} MET`
+      : 'MET',
+    isEmergency: m.isEmergency,
+    hasTelemetry: m.hasTelemetry,
+    telemetryData: m.telemetryData,
+  });
+
+  const syncSharedChannels = async () => {
+    try {
+      const [vanceRes, teamRes] = await Promise.all([
+        fetch('/api/communications/messages/conv-astro-salma'),
+        fetch('/api/communications/messages/conv-med-team'),
+      ]);
+      const [vanceJson, teamJson] = await Promise.all([vanceRes.json(), teamRes.json()]);
+      setChannelMessages((prev) => ({
+        ...prev,
+        ...(vanceJson.success && Array.isArray(vanceJson.data)
+          ? { 'dr-vance': vanceJson.data.map(mapServerMsg) }
+          : {}),
+        ...(teamJson.success && Array.isArray(teamJson.data)
+          ? { 'medical-team': teamJson.data.map(mapServerMsg) }
+          : {}),
+      }));
+    } catch {
+      // Retain local state if offline
+    }
+  };
+
+  useEffect(() => {
+    syncSharedChannels();
+    const interval = setInterval(syncSharedChannels, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Check Web Speech API speech recognition
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -228,10 +276,12 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
     }
   }, []);
 
-  // Auto-scroll chat
+  const lastActiveMessageId = currentMessages[currentMessages.length - 1]?.id;
+
+  // Auto-scroll chat when active channel messages change, channel switches, or typing starts
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [channelMessages, isSimulatingTyping, activeChannelId]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [currentMessages.length, lastActiveMessageId, isSimulatingTyping, activeChannelId]);
 
   // Handle Speech-to-Text Dictation
   const startRecording = () => {
@@ -293,7 +343,7 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
   };
 
   // Send message handler
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const text = inputText.trim();
     if (!text) return;
@@ -322,36 +372,81 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
 
     setInputText('');
 
-    // Simulate reply after 2 seconds
+    // Real shared backend dispatch for Flight Surgeon & Medical Team channels
+    if (activeChannelId === 'dr-vance' || activeChannelId === 'medical-team') {
+      const convId = activeChannelId === 'dr-vance' ? 'conv-astro-salma' : 'conv-med-team';
+      try {
+        await fetch('/api/communications/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId: convId,
+            content: text,
+            sender: 'astronaut',
+            isSurgeon: false,
+            senderId: profile.id,
+            senderName: profile.name,
+            senderRole: profile.callsign,
+            astronautId: profile.id,
+            messageType: 'routine',
+            priority: 'normal',
+          }),
+        });
+        await syncSharedChannels();
+      } catch {
+        // Optimistic message preserved locally
+      }
+      return;
+    }
+
+    if (activeChannelId === 'ai-astro') {
+      setIsSimulatingTyping(true);
+      try {
+        const res = await fetch('/api/chat/astro', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text }),
+        });
+        const json = await res.json();
+        setIsSimulatingTyping(false);
+        if (res.ok && json.reply) {
+          const aiMsg: Message = {
+            id: `ai-${Date.now()}`,
+            sender: 'ai',
+            senderName: 'ASTRO Intelligence',
+            senderRole: 'Autonomous Copilot',
+            content: json.reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' MET',
+          };
+          setChannelMessages((prev) => ({
+            ...prev,
+            'ai-astro': [...(prev['ai-astro'] || []), aiMsg],
+          }));
+          return;
+        }
+      } catch {
+        setIsSimulatingTyping(false);
+      }
+      generateSimulatedReply(text, activeChannelId);
+      return;
+    }
+
+    // Buffered Family terminal reply
     setIsSimulatingTyping(true);
     setTimeout(() => {
       setIsSimulatingTyping(false);
       generateSimulatedReply(text, activeChannelId);
-    }, 2000);
+    }, 1200);
   };
 
-  // Simulate realistic aerospace reply based on active partner
+  // Simulate realistic aerospace reply for offline buffered/AI fallback channels
   const generateSimulatedReply = (userText: string, channelId: string) => {
     let replyText = '';
-    let sender: Message['sender'] = 'surgeon';
-    let senderName = 'Dr. Marcus Vance, M.D.';
-    let senderRole = 'Lead Flight Surgeon';
+    let sender: Message['sender'] = 'family';
+    let senderName = 'Johnson Family Relay';
+    let senderRole = 'Buffered Ground Terminal';
 
-    if (channelId === 'dr-vance') {
-      const lower = userText.toLowerCase();
-      if (lower.includes('pain') || lower.includes('spine') || lower.includes('hurt') || lower.includes('back')) {
-        replyText = `Copy that, Dr. Salma. Logging symptoms in MedCom. Spine elongation of +${profile.spineElongation} cm can compress intervertebral disks when shifting posture. Please apply the thermal lumbar wrap for 20 minutes and report back.`;
-      } else if (lower.includes('vitals') || lower.includes('heart') || lower.includes('bp') || lower.includes('sleep')) {
-        replyText = `Received. Your biometric telemetry telemetry confirms resting HR ${profile.restingHeartRate || 58} bpm with SpO2 ${profile.spO2Baseline || 99}%. Flight surgeons at JSC MedCom Alpha have cleared you for today's EVA payload bio-runs.`;
-      } else {
-        replyText = `Received Dr. Salma. Reviewing your latest vitals and flight status now. Telemetry link is solid on 248.50 MHz SAT-Uplink. Continue flight protocol.`;
-      }
-    } else if (channelId === 'medical-team') {
-      sender = 'team';
-      senderName = 'Ground Control MedCom';
-      senderRole = 'Flight Medicine Console';
-      replyText = `Message acknowledged by MCC-Houston Medical Team. Biomedical engineering has flagged your note for the shift handover log. Next orbital telecon in 90 minutes.`;
-    } else if (channelId === 'crew-support') {
+    if (channelId === 'crew-support') {
       sender = 'family';
       senderName = 'Johnson Family Relay';
       senderRole = 'Buffered Ground Terminal';
@@ -382,57 +477,48 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
     }
   };
 
-  // Trigger Emergency Bio-Ping
-  const handleConfirmEmergencyPing = () => {
+  // Trigger Emergency Bio-Ping (persists real alert + comms message to Flight Surgeon Console)
+  const handleConfirmEmergencyPing = async () => {
     setIsEmergencyModalOpen(false);
 
-    const emergencyMsg: Message = {
-      id: `emergency-${Date.now()}`,
-      sender: 'system',
-      senderName: 'ASTROCARE EMERGENCY BEACON',
-      content: `🚨 EMERGENCY BIO-PING TRANSMITTED // Telemetry attached: HR: ${profile.restingHeartRate || 58} bpm | BP: 118/76 mmHg | SpO2: ${profile.spO2Baseline || 99}% | Spine: +${profile.spineElongation} cm | Rad: ${profile.radiationDoseMsv} mSv | MET Day: ${profile.missionElapsedDays} | Priority: CRITICAL ALPHA`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' MET',
-      isEmergency: true,
-      hasTelemetry: true,
-      telemetryData: {
-        hr: profile.restingHeartRate || 58,
-        bp: '118/76 mmHg',
-        spO2: profile.spO2Baseline || 99,
-        spineDelta: profile.spineElongation,
-      },
-    };
-
-    // Add to Dr. Vance's channel and active channel
-    setChannelMessages((prev) => ({
-      ...prev,
-      'dr-vance': [...(prev['dr-vance'] || []), emergencyMsg],
-      ...(activeChannelId !== 'dr-vance' ? { [activeChannelId]: [...(prev[activeChannelId] || []), emergencyMsg] } : {}),
-    }));
+    try {
+      await fetch('/api/pings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          astronautId: profile.id,
+          source: 'emergency',
+          severity: 'critical',
+          isEmergency: true,
+        }),
+      });
+      await syncSharedChannels();
+      setActiveChannelId('dr-vance');
+    } catch {
+      const emergencyMsg: Message = {
+        id: `emergency-${Date.now()}`,
+        sender: 'system',
+        senderName: 'ASTROCARE EMERGENCY BEACON',
+        content: `🚨 EMERGENCY BIO-PING TRANSMITTED // Telemetry attached: HR: ${profile.restingHeartRate || 58} bpm | BP: 118/76 mmHg | SpO2: ${profile.spO2Baseline || 99}% | Spine: +${profile.spineElongation} cm | Rad: ${profile.radiationDoseMsv} mSv | MET Day: ${profile.missionElapsedDays} | Priority: CRITICAL ALPHA`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' MET',
+        isEmergency: true,
+        hasTelemetry: true,
+        telemetryData: {
+          hr: profile.restingHeartRate || 58,
+          bp: '118/76 mmHg',
+          spO2: profile.spO2Baseline || 99,
+          spineDelta: profile.spineElongation,
+        },
+      };
+      setChannelMessages((prev) => ({
+        ...prev,
+        'dr-vance': [...(prev['dr-vance'] || []), emergencyMsg],
+      }));
+    }
 
     if (onSendToast) {
       onSendToast('EMERGENCY BIO-PING SENT: Telemetry dispatched to MCC-Houston Flight Surgeon!', 'error');
     }
-
-    // Immediate Flight Surgeon urgent response
-    setTimeout(() => {
-      const surgeonAlertReply: Message = {
-        id: `vance-urgent-${Date.now()}`,
-        sender: 'surgeon',
-        senderName: 'Dr. Marcus Vance, M.D.',
-        senderRole: 'Lead Flight Surgeon · URGENT OVERRIDE',
-        content: `Dr. Salma! This is Dr. Vance at JSC MedCom Alpha. Emergency bio-ping received with 1-Hz telemetry payload. Telemetry shows SpO2 ${profile.spO2Baseline || 99}% and HR ${profile.restingHeartRate || 58}. I am holding emergency audio override open on 248.500 MHz. What is your immediate physical status?`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' MET',
-        isEmergency: true,
-      };
-
-      setChannelMessages((prev) => ({
-        ...prev,
-        'dr-vance': [...(prev['dr-vance'] || []), surgeonAlertReply],
-      }));
-
-      // Switch to Dr. Vance channel so user sees it right away
-      setActiveChannelId('dr-vance');
-    }, 1800);
   };
 
   // Toggle mock audio play
@@ -542,7 +628,7 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
           )}
 
           {/* Message List - Scrollable (Requirement 3) */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
             {currentMessages.map((msg) => {
               const isAstronaut = msg.sender === 'astronaut';
               const isSystem = msg.sender === 'system' || msg.isEmergency;
@@ -719,7 +805,7 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
           )}
 
           {/* Input Bar (Requirement 3) */}
-          <div className="p-4 border-t border-slate-800 bg-[#080d22] shrink-0">
+          <div className="sticky bottom-0 z-10 p-4 border-t border-slate-800 bg-[#080d22]/90 backdrop-blur-xl shrink-0">
             <form onSubmit={handleSendMessage} className="flex items-center gap-2.5">
               {/* Paperclip quick telemetry attach */}
               <button
@@ -919,8 +1005,8 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
 
       {/* Emergency Bio-Ping Confirmation Modal (Requirement 4) */}
       {isEmergencyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="w-full max-w-lg rounded-2xl bg-[#0d0716] border-2 border-rose-500 p-6 sm:p-7 shadow-[0_0_50px_rgba(244,63,94,0.6)] space-y-5 animate-in zoom-in-95 duration-200 text-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 overflow-hidden">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-[#0d0716] border-2 border-rose-500 p-6 sm:p-7 shadow-[0_0_50px_rgba(244,63,94,0.6)] space-y-5 animate-in zoom-in-95 duration-200 text-slate-100">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-rose-900/60">
               <div className="flex items-center gap-3">

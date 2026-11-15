@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Sparkles, Stethoscope } from 'lucide-react';
+import { CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
 import { SpaceBackground } from './SpaceBackground.js';
 import { TopNav } from './TopNav.js';
 import { Sidebar } from './Sidebar.js';
@@ -8,7 +8,6 @@ import { EditProfileModal } from './EditProfileModal.js';
 import { ClinicalContextModal } from './ClinicalContextModal.js';
 import { RoleModal } from './RoleModal.js';
 import { AstronautProfile } from '../types/astronaut.js';
-import { useAuth } from '../contexts/AuthContext.tsx';
 
 interface LayoutProps {
   profile: AstronautProfile;
@@ -39,8 +38,6 @@ export const Layout: React.FC<LayoutProps> = ({
   onCloseRoleModal,
   toastMessage,
 }) => {
-  const { role, loginWithRole } = useAuth();
-
   return (
     <div
       className="min-h-screen text-slate-100 relative selection:bg-[#00E5FF]/30 selection:text-[#00E5FF]"
@@ -63,54 +60,38 @@ export const Layout: React.FC<LayoutProps> = ({
       <SpaceBackground />
 
       {/* Main Container */}
-      <div className="relative z-10 flex flex-col min-h-screen">
+      <div className="relative z-10 flex flex-col h-screen overflow-hidden">
         <TopNav
           isEditing={isEditingInline}
           onToggleEdit={onToggleEdit}
           onOpenRoleModal={onOpenRoleModal}
         />
 
-        {/* Content Layout: Left Sidebar + Main Content */}
-        <div className="flex-1 flex flex-row">
+        {/* Content Layout: Sticky Left Sidebar + Independently Scrollable Main Content */}
+        <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
           <Sidebar
             astronautName={profile.name}
             callsign={profile.callsign}
           />
 
-          <main className="flex-1 px-4 sm:px-6 lg:px-8 py-7 max-w-7xl mx-auto w-full space-y-7">
-            {role === 'surgeon' && (
-              <div className="p-3.5 rounded-xl bg-[#FF8C00]/15 border border-[#FF8C00]/45 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 text-[#FFB347]">
-                  <Stethoscope className="w-4 h-4 text-[#FF8C00] shrink-0" />
-                  <span>
-                    <strong className="text-white">FLIGHT SURGEON DEMO SESSION:</strong> Dedicated Surgeon Dashboard will launch in the next phase. Inspecting {profile.name}&apos;s crew dossier.
-                  </span>
+          <main className="flex-1 min-w-0 h-full overflow-y-auto">
+            <div className="px-4 sm:px-6 lg:px-8 py-7 max-w-7xl mx-auto w-full space-y-7">
+              <Outlet />
+
+              {/* Footer with NASA Space Apps Challenge Accreditation */}
+              <footer className="pt-8 pb-12 border-t border-slate-800/80 text-xs sm:text-sm font-mono text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_10px_#00E5FF]" />
+                  <span className="text-white font-bold">ASTROCARE // NASA SPACE APPS CHALLENGE</span>
+                  <span>— Phase 1: Astronaut Health Foundation</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => loginWithRole('astronaut')}
-                  className="px-3 py-1.5 rounded-lg bg-[#FF8C00] text-black font-bold hover:bg-[#FF8C00]/90 transition-colors shrink-0 cursor-pointer"
-                >
-                  SWITCH TO ASTRONAUT ROLE
-                </button>
-              </div>
-            )}
-
-            <Outlet />
-
-            {/* Footer with NASA Space Apps Challenge Accreditation */}
-            <footer className="pt-8 pb-12 border-t border-slate-800/80 text-xs sm:text-sm font-mono text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00E5FF] shadow-[0_0_10px_#00E5FF]" />
-                <span className="text-white font-bold">ASTROCARE // NASA SPACE APPS CHALLENGE</span>
-                <span>— Phase 1: Astronaut Health Foundation</span>
-              </div>
-              <div className="flex items-center gap-4 text-slate-300">
-                <span className="text-[#FF8C00] font-semibold">SIMULATED DEMONSTRATION DATA</span>
-                <span>·</span>
-                <span className="text-white">JSC FLIGHT MEDICINE REGISTRY</span>
-              </div>
-            </footer>
+                <div className="flex items-center gap-4 text-slate-300">
+                  <span className="text-[#FF8C00] font-semibold">SIMULATED DEMONSTRATION DATA</span>
+                  <span>·</span>
+                  <span className="text-white">JSC FLIGHT MEDICINE REGISTRY</span>
+                </div>
+              </footer>
+            </div>
           </main>
         </div>
       </div>
