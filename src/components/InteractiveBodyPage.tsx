@@ -24,6 +24,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { SymptomReport, AstronautProfile } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 const ECORCHE_MODEL_URL = '/models/ecorche-main/model/ecorche.meshopt.glb';
 
@@ -376,7 +377,7 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
   const fetchSymptoms = async () => {
     setIsLoadingSymptoms(true);
     try {
-      const res = await fetch('/api/symptoms');
+      const res = await fetch(apiUrl('/api/symptoms'));
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -457,7 +458,7 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/symptoms', {
+      const res = await fetch(apiUrl('/api/symptoms'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -488,7 +489,7 @@ export const InteractiveBodyPage: React.FC<InteractiveBodyPageProps> = ({ profil
   // Delete / Resolve Symptom
   const handleDeleteSymptom = async (id: string) => {
     try {
-      const res = await fetch(`/api/symptoms/${id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/symptoms/${id}`), { method: 'DELETE' });
       if (res.ok) {
         setSymptoms((prev) => prev.filter((s) => s.id !== id));
       }

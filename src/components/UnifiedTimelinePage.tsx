@@ -16,6 +16,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { TimelineEvent, TimelineEventType, AstronautProfile } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 interface UnifiedTimelinePageProps {
   profile: AstronautProfile;
@@ -31,7 +32,7 @@ export const UnifiedTimelinePage: React.FC<UnifiedTimelinePageProps> = ({ profil
   const fetchTimeline = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/timeline');
+      const res = await fetch(apiUrl('/api/timeline'));
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {

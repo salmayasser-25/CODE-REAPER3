@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, Radio, CheckCircle, Send, Check, Stethoscope } from 'lucide-react';
 import { FlightSurgeon } from '../types/astronaut.js';
+import { apiUrl } from '../lib/api.ts';
 
 interface SurgeonLinkCardProps {
   astronautId?: string;
@@ -25,7 +26,7 @@ export const SurgeonLinkCard: React.FC<SurgeonLinkCardProps> = ({
   const handleSendPing = async () => {
     setIsTransmitting(true);
     try {
-      const res = await fetch('/api/pings', {
+      const res = await fetch(apiUrl('/api/pings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

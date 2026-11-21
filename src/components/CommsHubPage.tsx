@@ -26,6 +26,7 @@ import {
   Volume2
 } from 'lucide-react';
 import { AstronautProfile } from '../types/astronaut.js';
+import { apiUrl } from '../lib/api.ts';
 
 interface CommsHubPageProps {
   profile: AstronautProfile;
@@ -244,8 +245,8 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
   const syncSharedChannels = async () => {
     try {
       const [vanceRes, teamRes] = await Promise.all([
-        fetch('/api/communications/messages/conv-astro-salma'),
-        fetch('/api/communications/messages/conv-med-team'),
+        fetch(apiUrl('/api/communications/messages/conv-astro-salma')),
+        fetch(apiUrl('/api/communications/messages/conv-med-team')),
       ]);
       const [vanceJson, teamJson] = await Promise.all([vanceRes.json(), teamRes.json()]);
       setChannelMessages((prev) => ({
@@ -376,7 +377,7 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
     if (activeChannelId === 'dr-vance' || activeChannelId === 'medical-team') {
       const convId = activeChannelId === 'dr-vance' ? 'conv-astro-salma' : 'conv-med-team';
       try {
-        await fetch('/api/communications/messages', {
+        await fetch(apiUrl('/api/communications/messages'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -402,7 +403,7 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
     if (activeChannelId === 'ai-astro') {
       setIsSimulatingTyping(true);
       try {
-        const res = await fetch('/api/chat/astro', {
+        const res = await fetch(apiUrl('/api/chat/astro'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: text }),
@@ -482,7 +483,7 @@ export const CommsHubPage: React.FC<CommsHubPageProps> = ({ profile, onSendToast
     setIsEmergencyModalOpen(false);
 
     try {
-      await fetch('/api/pings', {
+      await fetch(apiUrl('/api/pings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

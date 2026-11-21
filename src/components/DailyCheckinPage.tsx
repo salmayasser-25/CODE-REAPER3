@@ -17,6 +17,7 @@ import {
   ShieldCheck 
 } from 'lucide-react';
 import { DailyCheckIn, AstronautProfile } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 interface DailyCheckinPageProps {
   profile: AstronautProfile;
@@ -52,7 +53,7 @@ export const DailyCheckinPage: React.FC<DailyCheckinPageProps> = ({ profile, onN
   const fetchCheckIns = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/checkins');
+      const res = await fetch(apiUrl('/api/checkins'));
       if (res.ok) {
         const json = await res.json();
         if (json.success && json.data) {
@@ -93,7 +94,7 @@ export const DailyCheckinPage: React.FC<DailyCheckinPageProps> = ({ profile, onN
     };
 
     try {
-      const res = await fetch('/api/checkin', {
+      const res = await fetch(apiUrl('/api/checkin'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

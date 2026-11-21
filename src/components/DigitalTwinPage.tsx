@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { AstronautProfile } from '../types/astronaut.js';
 import { ClinicalContextModal } from './ClinicalContextModal.js';
+import { apiUrl } from '../lib/api.ts';
 
 const ECORCHE_MODEL_URL = '/models/ecorche-main/model/ecorche.meshopt.glb';
 
@@ -406,7 +407,7 @@ export const DigitalTwinPage: React.FC<DigitalTwinPageProps> = ({
     }, 450);
 
     try {
-      const response = await fetch('/api/simulator/run', {
+      const response = await fetch(apiUrl('/api/simulator/run'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -963,7 +964,7 @@ export const DigitalTwinPage: React.FC<DigitalTwinPageProps> = ({
                   type="button"
                   onClick={async () => {
                     try {
-                      await fetch('/api/pings', {
+                      await fetch(apiUrl('/api/pings'), {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

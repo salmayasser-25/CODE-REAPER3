@@ -60,6 +60,7 @@ import {
   TimelineEvent,
   VitalsData,
 } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 interface SurgeonDashboardProps {
   defaultTab?: string;
@@ -146,13 +147,13 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
   const fetchAllSurgeonData = useCallback(async (markActiveConvRead = false) => {
     try {
       const [crewRes, dossierRes, resRes, alertsRes, ordersRes, msgRes, reportsRes] = await Promise.all([
-        fetch('/api/surgeon/crew'),
-        fetch(`/api/surgeon/crew/${encodeURIComponent(selectedAstronautId)}`),
-        fetch('/api/restrictions'),
-        fetch('/api/surgeon/alerts'),
-        fetch('/api/surgeon/orders'),
-        fetch('/api/surgeon/messages'),
-        fetch('/api/reports/exchanged'),
+        fetch(apiUrl('/api/surgeon/crew')),
+        fetch(apiUrl(`/api/surgeon/crew/${encodeURIComponent(selectedAstronautId)}`)),
+        fetch(apiUrl('/api/restrictions')),
+        fetch(apiUrl('/api/surgeon/alerts')),
+        fetch(apiUrl('/api/surgeon/orders')),
+        fetch(apiUrl('/api/surgeon/messages')),
+        fetch(apiUrl('/api/reports/exchanged')),
       ]);
 
       const [crewJ, dossierJ, resJ, alertsJ, ordersJ, msgJ, reportsJ] = await Promise.all([
@@ -186,7 +187,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
       if (reportsJ.success && Array.isArray(reportsJ.data)) setExchangedReports(reportsJ.data);
 
       if (markActiveConvRead && currentTab === 'communications' && activeConvId) {
-        fetch(`/api/surgeon/messages?conversationId=${encodeURIComponent(activeConvId)}&markRead=true`).catch(() => {});
+        fetch(apiUrl(`/api/surgeon/messages?conversationId=${encodeURIComponent(activeConvId)}&markRead=true`)).catch(() => {});
       }
     } catch {
       // Keep last known snapshot on transient network issue
@@ -234,7 +235,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
   // ── Alert Actions ──────────────────────────────────────────────────────────
   const handleAcknowledgeAlert = async (alertId: string) => {
     try {
-      const res = await fetch(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
+      const res = await fetch(apiUrl(`/api/alerts/${encodeURIComponent(alertId)}/acknowledge`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ surgeonName: 'Dr. Marcus Vance, M.D.' }),
@@ -251,7 +252,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
 
   const handleResolveAlert = async (alertId: string) => {
     try {
-      const res = await fetch(`/api/alerts/${encodeURIComponent(alertId)}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/alerts/${encodeURIComponent(alertId)}`), { method: 'DELETE' });
       if (res.ok) {
         await fetchAllSurgeonData();
         showToast('Alert resolved and archived', 'info');
@@ -264,7 +265,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
   // ── Restriction & Exercise Approval Orders ─────────────────────────────────
   const handleLiftRestriction = async (restrictionId: string) => {
     try {
-      const res = await fetch(`/api/restrictions/${encodeURIComponent(restrictionId)}`, {
+      const res = await fetch(apiUrl(`/api/restrictions/${encodeURIComponent(restrictionId)}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Lifted' }),
@@ -281,7 +282,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
 
   const handleReactivateRestriction = async (restrictionId: string) => {
     try {
-      const res = await fetch(`/api/restrictions/${encodeURIComponent(restrictionId)}`, {
+      const res = await fetch(apiUrl(`/api/restrictions/${encodeURIComponent(restrictionId)}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'Active' }),
@@ -297,7 +298,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
 
   const handleApproveExercise = async (exercise: SpaceExercise) => {
     try {
-      const res = await fetch('/api/surgeon/orders', {
+      const res = await fetch(apiUrl('/api/surgeon/orders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -323,7 +324,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
 
   const handleRevokeExerciseApproval = async (exercise: SpaceExercise) => {
     try {
-      const res = await fetch('/api/surgeon/orders', {
+      const res = await fetch(apiUrl('/api/surgeon/orders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -353,7 +354,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-      const res = await fetch('/api/restrictions', {
+      const res = await fetch(apiUrl('/api/restrictions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -386,7 +387,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
     newStatus: 'active' | 'monitoring' | 'resolved'
   ) => {
     try {
-      const res = await fetch(`/api/symptoms/${encodeURIComponent(symptomId)}`, {
+      const res = await fetch(apiUrl(`/api/symptoms/${encodeURIComponent(symptomId)}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ astronautId: selectedAstronautId, status: newStatus }),
@@ -404,7 +405,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
     e.preventDefault();
     if (!noteTitle.trim() || !noteContent.trim()) return;
     try {
-      const res = await fetch('/api/doctor-notes', {
+      const res = await fetch(apiUrl('/api/doctor-notes'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -443,7 +444,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
     setIsSendingReply(true);
     setReplyText('');
     try {
-      const res = await fetch('/api/surgeon/messages', {
+      const res = await fetch(apiUrl('/api/surgeon/messages'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -470,7 +471,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
 
   const handleEndorseReport = async (reportId: string) => {
     try {
-      const res = await fetch(`/api/reports/exchanged/${encodeURIComponent(reportId)}/review`, {
+      const res = await fetch(apiUrl(`/api/reports/exchanged/${encodeURIComponent(reportId)}/review`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1080,7 +1081,7 @@ export const SurgeonDashboard: React.FC<SurgeonDashboardProps> = ({ defaultTab =
                           type="button"
                           onClick={() => {
                             setActiveConvId(conv.id);
-                            fetch(`/api/surgeon/messages?conversationId=${encodeURIComponent(conv.id)}&markRead=true`)
+                            fetch(apiUrl(`/api/surgeon/messages?conversationId=${encodeURIComponent(conv.id)}&markRead=true`))
                               .then(() => fetchAllSurgeonData(false))
                               .catch(() => {});
                           }}

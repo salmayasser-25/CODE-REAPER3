@@ -173,6 +173,37 @@ function getGeminiClient(): GoogleGenAI | null {
 
 
 
+// Configure CORS for cross-origin Vercel / separate frontend deployments
+app.use((req: Request, res: Response, next) => {
+  const origin = req.headers.origin;
+  const configuredOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const isAllowedOrigin =
+    !origin ||
+    configuredOrigins.includes('*') ||
+    configuredOrigins.includes(origin) ||
+    /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin) ||
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+
+  if (origin && isAllowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else if (!origin) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Surgeon-Role, X-Surgeon-Badge');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
 // Support JSON payloads including base64 image previews
 app.use(express.json({ limit: '15mb' }));
 
@@ -2420,8 +2451,8 @@ app.post('/api/ai/chat', handleAstroChat);
 
 // ─── Fitness / Exercise Endpoints ───────────────────────────────────────────
 
-// GET /api/fitness/exercises — All exercises evaluated against astronaut profile & surgeon clearances
-app.get('/api/fitness/exercises', (req: Request, res: Response) => {
+// GET /api/fitness/exercises (and /api/exercises alias) — All exercises evaluated against astronaut profile & surgeon clearances
+const handleGetExercises = (req: Request, res: Response) => {
   try {
     const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
     const { exercises, restricted, approvedExerciseIds } = evaluateExercisesForAstronaut(astronautId);
@@ -2429,10 +2460,12 @@ app.get('/api/fitness/exercises', (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch exercises' });
   }
-});
+};
+app.get('/api/fitness/exercises', handleGetExercises);
+app.get('/api/exercises', handleGetExercises);
 
-// GET /api/fitness/exercises/:category — Exercises filtered by category
-app.get('/api/fitness/exercises/:category', (req: Request, res: Response) => {
+// GET /api/fitness/exercises/:category (and /api/exercises/:category alias) — Exercises filtered by category
+const handleGetExercisesByCategory = (req: Request, res: Response) => {
   try {
     const rawCategory = req.params.category;
     const astronautId = (req.query.astronautId as string) || 'ASTRO-74-SJ';
@@ -2459,7 +2492,9 @@ app.get('/api/fitness/exercises/:category', (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message || 'Failed to fetch exercises by category' });
   }
-});
+};
+app.get('/api/fitness/exercises/:category', handleGetExercisesByCategory);
+app.get('/api/exercises/:category', handleGetExercisesByCategory);
 
 // GET /api/fitness/sessions — Fetch completed workout sessions
 app.get('/api/fitness/sessions', (req: Request, res: Response) => {

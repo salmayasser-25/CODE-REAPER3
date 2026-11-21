@@ -38,6 +38,7 @@ import {
 import { WorkoutSessionModal } from './WorkoutSessionModal.tsx';
 import { ProtocolAdherenceChart } from './ProtocolAdherenceChart.tsx';
 import { useAuth } from '../contexts/AuthContext.tsx';
+import { apiUrl } from '../lib/api.ts';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface FitnessPageProps {
@@ -103,7 +104,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
   // ── Fetch completed workout sessions ─────────────────────────────────────
   const fetchWorkoutSessions = async () => {
     try {
-      const res = await fetch(`/api/fitness/sessions?astronautId=${encodeURIComponent(profile.id)}`);
+      const res = await fetch(apiUrl(`/api/fitness/sessions?astronautId=${encodeURIComponent(profile.id)}`));
       if (res.ok) {
         const json = await res.json();
         setCompletedSessions(json.data ?? []);
@@ -119,20 +120,21 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
       setIsLoadingExercises(true);
       setExercisesError(null);
     }
+    const base =
+      category && category !== 'all'
+        ? `/api/fitness/exercises/${encodeURIComponent(category)}`
+        : '/api/fitness/exercises';
+    const url = apiUrl(`${base}?astronautId=${encodeURIComponent(profile.id)}`);
     try {
-      const base =
-        category && category !== 'all'
-          ? `/api/fitness/exercises/${encodeURIComponent(category)}`
-          : '/api/fitness/exercises';
-      const url = `${base}?astronautId=${encodeURIComponent(profile.id)}`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to load exercises');
+      if (!res.ok) throw new Error(`Failed to load exercises (HTTP ${res.status})`);
       const json = await res.json();
       setExercises(json.data ?? json.exercises ?? json ?? []);
       if (Array.isArray(json.approvedExerciseIds)) {
         setServerApprovedIds(json.approvedExerciseIds);
       }
     } catch (err: any) {
+      console.error('Failed to load exercises from', url, err);
       if (!silent) {
         setExercisesError(err.message || 'Unable to load exercises');
       }
@@ -147,17 +149,19 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
   const fetchAIAnalysis = async () => {
     setIsLoadingAI(true);
     setAiError(null);
+    const endpoint = apiUrl('/api/fitness/ai-analysis');
     try {
-      const res = await fetch('/api/fitness/ai-analysis', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ astronautId: profile.id }),
       });
-      if (!res.ok) throw new Error('AI analysis unavailable');
+      if (!res.ok) throw new Error(`AI analysis unavailable (HTTP ${res.status})`);
       const json = await res.json();
       const analysis: FitnessAIAnalysis = json.data ?? json.analysis ?? json;
       setAiAnalysis(analysis);
     } catch (err: any) {
+      console.error('Failed to load fitness AI analysis from', endpoint, err);
       setAiError(err.message || 'AI analysis unavailable');
     } finally {
       setIsLoadingAI(false);
@@ -174,7 +178,7 @@ export const FitnessPage: React.FC<FitnessPageProps> = ({ profile }) => {
     setChatInput('');
 
     try {
-      const res = await fetch('/api/fitness/chat', {
+      const res = await fetch(apiUrl('/api/fitness/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: q, astronautId: profile.id }),

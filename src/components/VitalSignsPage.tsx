@@ -27,6 +27,7 @@ import {
   ReferenceLine 
 } from 'recharts';
 import { VitalsData, AstronautProfile } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 interface VitalSignsPageProps {
   profile: AstronautProfile;
@@ -36,6 +37,7 @@ interface VitalSignsPageProps {
 export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavigateToCheckin }) => {
   const [vitals, setVitals] = useState<VitalsData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [vitalsError, setVitalsError] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [aiInsight, setAiInsight] = useState<string>('');
   const [insightSource, setInsightSource] = useState<string>('gemini-4-hydrogen');
@@ -59,26 +61,31 @@ export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavig
   // Load vitals from backend
   const fetchVitals = async () => {
     setIsLoading(true);
+    setVitalsError(null);
+    const endpoint = apiUrl(`/api/vitals?astronautId=${encodeURIComponent(profile.id)}`);
     try {
-      const res = await fetch('/api/vitals');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && json.data) {
-          setVitals(json.data);
-          setInputHr(json.data.heartRate);
-          setInputBpSys(json.data.bloodPressureSys);
-          setInputBpDia(json.data.bloodPressureDia);
-          setInputSpO2(json.data.spO2);
-          setInputTemp(json.data.temperature);
-          setInputSleep(json.data.sleepHours);
-          if (json.data.weightKg) setInputWeight(json.data.weightKg);
-          // Initial AI analysis trigger
-          fetchAiInsight(json.data);
-          return;
-        }
+      const res = await fetch(endpoint);
+      if (!res.ok) {
+        throw new Error(`Vitals endpoint returned HTTP ${res.status} (${endpoint})`);
       }
-    } catch (e) {
-      console.warn('Failed to fetch vitals, using fallback:', e);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setVitals(json.data);
+        setInputHr(json.data.heartRate);
+        setInputBpSys(json.data.bloodPressureSys);
+        setInputBpDia(json.data.bloodPressureDia);
+        setInputSpO2(json.data.spO2);
+        setInputTemp(json.data.temperature);
+        setInputSleep(json.data.sleepHours);
+        if (json.data.weightKg) setInputWeight(json.data.weightKg);
+        // Initial AI analysis trigger
+        fetchAiInsight(json.data);
+        return;
+      }
+      throw new Error(json.error || 'Vitals telemetry payload missing');
+    } catch (e: any) {
+      console.error('Failed to fetch vitals from', endpoint, e);
+      setVitalsError(e?.message || 'Unable to connect to ISS Bio-Telemetry Bus');
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +97,7 @@ export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavig
     setIsSubmittingLog(true);
 
     try {
-      const res = await fetch('/api/vitals/log', {
+      const res = await fetch(apiUrl('/api/vitals/log'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +168,7 @@ export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavig
     };
 
     const requestInsight = async () => {
-      const res = await fetch('/api/ai/insight', {
+      const res = await fetch(apiUrl('/api/ai/insight'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vitals: dataToAnalyze, profile: compactProfile }),
@@ -242,7 +249,7 @@ export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavig
     }
 
     try {
-      const res = await fetch('/api/vitals', {
+      const res = await fetch(apiUrl('/api/vitals'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newVitals),
@@ -259,13 +266,37 @@ export const VitalSignsPage: React.FC<VitalSignsPageProps> = ({ profile, onNavig
     }
   };
 
-  if (isLoading || !vitals) {
+  if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] text-center space-y-4">
         <RefreshCw className="w-8 h-8 text-[#00E5FF] animate-spin" />
         <div className="font-mono text-sm text-[#00E5FF] tracking-wider font-bold">
           CONNECTING TO ISS BIO-TELEMETRY BUS...
         </div>
+      </div>
+    );
+  }
+
+  if (!vitals) {
+    return (
+      <div className="glass-panel p-8 rounded-2xl border border-rose-500/40 bg-rose-950/20 flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
+        <AlertCircle className="w-10 h-10 text-rose-400" />
+        <div className="space-y-1.5 max-w-lg">
+          <h2 className="font-mono text-base font-bold text-rose-300 tracking-wider uppercase">
+            TELEMETRY LINK DISRUPTED
+          </h2>
+          <p className="text-sm text-slate-300 font-sans">
+            {vitalsError || 'Unable to retrieve biometric telemetry from the backend server.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={fetchVitals}
+          className="px-5 py-2.5 rounded-xl bg-[#00E5FF] hover:bg-cyan-400 text-black font-mono font-extrabold text-xs tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>RETRY TELEMETRY CONNECTION</span>
+        </button>
       </div>
     );
   }

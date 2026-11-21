@@ -22,6 +22,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { ChatMessage, AstronautProfile } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 const AVATAR_MODEL_URL = '/models/astronaut_helmet.glb';
 
@@ -545,7 +546,7 @@ export const MentalWellnessPage: React.FC<MentalWellnessPageProps> = ({ profile 
     }));
 
     try {
-      const res = await fetch('/api/chat/astro', {
+      const res = await fetch(apiUrl('/api/chat/astro'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

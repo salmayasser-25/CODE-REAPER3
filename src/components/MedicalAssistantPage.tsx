@@ -35,6 +35,7 @@ import {
   MedicalAssistantMessage,
   VitalSignEvaluation,
 } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 interface MedicalAssistantPageProps {
   crew: CrewMemberSummary[];
@@ -132,7 +133,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
   const fetchAssistantContext = async (astroId: string, silent = false) => {
     if (!silent) setIsLoadingContext(true);
     try {
-      const res = await fetch(`/api/medical-assistant/context/${encodeURIComponent(astroId)}`);
+      const res = await fetch(apiUrl(`/api/medical-assistant/context/${encodeURIComponent(astroId)}`));
       const json = await res.json();
       if (res.ok && json.success && json.data) {
         setContext(json.data);
@@ -197,7 +198,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
     setIsUpdatingAvailability(true);
     setErrorBanner(null);
     try {
-      const res = await fetch('/api/medical-assistant/availability', {
+      const res = await fetch(apiUrl('/api/medical-assistant/availability'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -235,7 +236,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
         ? '/api/medical-assistant/chat'
         : '/api/medical-assistant/doctor-message';
 
-      const res = await fetch(endpoint, {
+      const res = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -271,7 +272,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
     setErrorBanner(null);
 
     try {
-      const res = await fetch('/api/medical-assistant/surgeon-reply', {
+      const res = await fetch(apiUrl('/api/medical-assistant/surgeon-reply'), {
         method: 'POST',
         headers: SURGEON_AUTH_HEADERS,
         body: JSON.stringify({
@@ -298,7 +299,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
   const handleAcknowledgeEmergency = async () => {
     try {
       const res = await fetch(
-        `/api/medical-assistant/emergency/acknowledge/${encodeURIComponent(selectedAstronautId)}`,
+        apiUrl(`/api/medical-assistant/emergency/acknowledge/${encodeURIComponent(selectedAstronautId)}`),
         {
           method: 'POST',
           headers: SURGEON_AUTH_HEADERS,
@@ -323,7 +324,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
     setIsLoadingAudit(true);
     try {
       const res = await fetch(
-        `/api/medical-assistant/ai-review/${encodeURIComponent(selectedAstronautId)}`,
+        apiUrl(`/api/medical-assistant/ai-review/${encodeURIComponent(selectedAstronautId)}`),
         { headers: SURGEON_AUTH_HEADERS }
       );
       const json = await res.json();
@@ -341,7 +342,7 @@ export const MedicalAssistantPage: React.FC<MedicalAssistantPageProps> = ({
     if (!context) return;
     try {
       const res = await fetch(
-        `/api/medical-assistant/history/${encodeURIComponent(selectedAstronautId)}?channel=${context.activeChannel}`,
+        apiUrl(`/api/medical-assistant/history/${encodeURIComponent(selectedAstronautId)}?channel=${context.activeChannel}`),
         { method: 'DELETE' }
       );
       const json = await res.json();

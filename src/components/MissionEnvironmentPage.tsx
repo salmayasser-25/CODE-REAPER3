@@ -21,6 +21,7 @@ import {
   Info
 } from 'lucide-react';
 import { AstronautProfile } from '../types/astronaut.js';
+import { apiUrl } from '../lib/api.ts';
 
 interface MissionEnvironmentPageProps {
   profile: AstronautProfile;
@@ -63,7 +64,7 @@ export const MissionEnvironmentPage: React.FC<MissionEnvironmentPageProps> = ({ 
   const fetchDonkiData = async () => {
     setIsLoadingDonki(true);
     try {
-      const res = await fetch('/api/nasa/donki');
+      const res = await fetch(apiUrl('/api/nasa/donki'));
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {

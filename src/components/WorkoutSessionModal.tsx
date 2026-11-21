@@ -26,6 +26,7 @@ import {
   SpaceExercise,
   WorkoutSessionLog,
 } from '../types/astronaut.ts';
+import { apiUrl } from '../lib/api.ts';
 
 interface WorkoutSessionModalProps {
   exercise: SpaceExercise;
@@ -339,7 +340,7 @@ export const WorkoutSessionModal: React.FC<WorkoutSessionModalProps> = ({
       liveCalories > 5 ? liveCalories : exercise.caloriesBurned;
 
     try {
-      const res = await fetch('/api/fitness/sessions', {
+      const res = await fetch(apiUrl('/api/fitness/sessions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

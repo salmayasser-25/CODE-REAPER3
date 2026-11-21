@@ -31,6 +31,7 @@ import {
   MedicalAlert,
 } from './types/astronaut.js';
 import { Sliders, Edit3, BookOpen } from 'lucide-react';
+import { apiUrl } from './lib/api.ts';
 
 const DEFAULT_INITIAL_PROFILE: AstronautProfile = {
   id: 'ASTRO-74-SJ',
@@ -179,7 +180,7 @@ function AppRoutes() {
 
   const loadProfile = async () => {
     try {
-      const response = await fetch('/api/profile');
+      const response = await fetch(apiUrl('/api/profile'));
       if (response.ok) {
         const json = await response.json();
         if (json.success && json.data) {
@@ -194,14 +195,14 @@ function AppRoutes() {
   const fetchSurgeonData = async () => {
     try {
       const [cRes, vRes, sRes, rRes, nRes, eRes, tRes, aRes] = await Promise.all([
-        fetch('/api/crew'),
-        fetch('/api/vitals'),
-        fetch('/api/symptoms'),
-        fetch('/api/restrictions'),
-        fetch('/api/doctor-notes'),
-        fetch('/api/fitness/exercises'),
-        fetch('/api/timeline'),
-        fetch('/api/alerts'),
+        fetch(apiUrl('/api/crew')),
+        fetch(apiUrl('/api/vitals')),
+        fetch(apiUrl('/api/symptoms')),
+        fetch(apiUrl('/api/restrictions')),
+        fetch(apiUrl('/api/doctor-notes')),
+        fetch(apiUrl('/api/fitness/exercises')),
+        fetch(apiUrl('/api/timeline')),
+        fetch(apiUrl('/api/alerts')),
       ]);
       const [cJ, vJ, sJ, rJ, nJ, eJ, tJ, aJ] = await Promise.all([
         cRes.json(),
@@ -236,7 +237,7 @@ function AppRoutes() {
     const dataToSend = updatesToSave || profile;
 
     try {
-      const response = await fetch('/api/profile', {
+      const response = await fetch(apiUrl('/api/profile'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSend),
@@ -265,7 +266,7 @@ function AppRoutes() {
     }
 
     try {
-      const response = await fetch('/api/profile/reset', { method: 'POST' });
+      const response = await fetch(apiUrl('/api/profile/reset'), { method: 'POST' });
       if (response.ok) {
         const result = await response.json();
         if (result.success && result.data) {
