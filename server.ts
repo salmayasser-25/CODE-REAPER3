@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import type { Request, Response } from 'express';
@@ -92,7 +93,8 @@ import {
 } from './src/server/mockDb.ts';
 
 const app = express();
-const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL === 'true' || Boolean(process.env.VERCEL_ENV);
+const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true' || isVercel;
 
 function resolvePort(): number {
   const portFlagIndex = process.argv.indexOf('--port');
@@ -2813,7 +2815,23 @@ app.all('/api/*', (req: Request, res: Response) => {
   });
 });
 
-// Mount Vite or static server
+// Root route for Vercel / API-only backend deployments
+const distDir = path.resolve(process.cwd(), 'dist');
+const hasBuiltFrontend = fs.existsSync(path.join(distDir, 'index.html'));
+
+if (isVercel || (isProd && !hasBuiltFrontend)) {
+  app.get('/', (_req: Request, res: Response) => {
+    res.json({
+      status: 'online',
+      service: 'ASTROCARE Backend API',
+      healthEndpoint: '/api/health',
+      endpoints: ['/api/vitals', '/api/fitness/exercises', '/api/exercises', '/api/fitness/ai-analysis'],
+      timestamp: new Date().toISOString(),
+    });
+  });
+}
+
+// Mount Vite or static server and start HTTP listener in non-serverless environments
 async function startServer() {
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
@@ -2835,21 +2853,25 @@ async function startServer() {
         next(err);
       }
     });
-  } else {
-    const distDir = path.resolve(process.cwd(), 'dist');
+  } else if (hasBuiltFrontend) {
     app.use(express.static(distDir));
     app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[ASTROCARE] Server running on http://0.0.0.0:${PORT}`);
-    setInterval(() => {
-      sweepExpiredDoctorTimeouts().catch(() => {});
-    }, 15000);
-  });
+  if (process.env.NODE_ENV !== 'production' || !isVercel) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[ASTROCARE] Server running on http://0.0.0.0:${PORT}`);
+      setInterval(() => {
+        sweepExpiredDoctorTimeouts().catch(() => {});
+      }, 15000);
+    });
+  }
 }
 
-startServer();
-export default app
+if (!isVercel) {
+  startServer();
+}
+
+export default app;
